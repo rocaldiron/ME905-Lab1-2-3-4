@@ -5,6 +5,9 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# packages
 require(glmnet)
 require(readr)
 ```
@@ -36,6 +39,8 @@ O objetivo dessa parte é apresentar um modelo de regressão linear
   (escolha um dos métodos) para controlar o número de
   variáveis selecionadas.
 
+Utilizando a correção de Bonferroni
+
 ```{r}
 # leitura banco de dados
 db <- read_csv("l1d1.csv")
@@ -55,98 +60,85 @@ summary(model_reajustado)
   um conjunto de dados de teste.
   
 ```{r}
-n <- nrow(db)
-set.seed(123)
-amostra_teste <- sample(1:n, size = n/5, replace = FALSE)
-df_treino <- db[-amostra_teste,]
-df_teste <- db[amostra_teste,]
-resultados <- data.frame(
-EQM_treino = numeric(0),
-EQM_teste = numeric(0)
-)
-
-fsr <- function(data, p_max = 40){
-  resposta <- db[,1]
-  covariavel <- db[,-1]
+fsr <- function(data, p_max = 40) {
+  # separando banco de dados 80/20
+  n_treino <- 0.8 * nrow(data)
+  n_teste <- 0.2 * nrow(data)
+  shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
+  treino <- db[shuffle == 1,]
+  teste <- db[shuffle == 2,]
+  names_pred <- names(data[-1])
   
-  p <- 0
-  df_atualizado <- resposta
+  # criando e definindo objetos
+  n <- nrow(data)
+  pred_selecionado <- character(p_max)
+  result <- data.frame(p = 1:p_max, EQM = rep(0, p_max),
+                           pred = character(p_max))
+  EQM_pred <- numeric(p_max)
   
-  ssr_por_p <- data.frame(p = c(), ssr_min = c())
-  
-  while (p < p_max){
-    ssr <- c()
-    for (i in 1:ncol(covariavel)){
-      df_atualizado <- cbind(df_atualizado[,1:(p+1)], covariavel[,i])
-      
-      modelo <- lm(y~.,df_atualizado) 
-      ssr <- c(ssr, sum(summary(modelo)$residuals^2))
-      
+  for (p in 1:p_max) {
+    EQM <- vector(mode='numeric', p_max - p + 1)
+    names_pred <- setdiff(names_pred, pred_selecionado)
+    j <- 1
+    
+    for (i in names_pred) {
+      formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
+                                            collapse = ' + ')))
+      EQM[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+      j <- j + 1
     }
-    ssr_por_p <- rbind(ssr_por_p, c(p,min(ssr)))
     
-    df_atualizado <- cbind(df_atualizado[,1:(p+1)], covariavel[,which.min(ssr)])
-    
-    colnames(df_atualizado) <- c("y", colnames(df_atualizado)[2:ncol(df_atualizado)])
-    covariavel <- covariavel[,-which.min(ssr)]
-    
-    p <- p+1
+    pred_selecionado[p] <- setdiff(names_pred, pred_selecionado)[which.min(EQM)]
+    EQM_pred[p] <- sum(lm(y ~ ., teste[c('y', pred_selecionado[1:p])])$residuals^2)/n_teste
+    result[p,2:3] <- c(EQM_pred[p], pred_selecionado[p])
   }
-  
-  #modelo_final <- lm(y ~., df_atualizado)
-  
-  return(ssr_por_p)
+  return(list('preditores' = pred_selecionado,
+              'result' = result))
 }
 
-fsr(db)
+obj <- fsr(db, p_max = 5)
 
-
+knitr::kable(obj$result)
+plot(obj$result$p, obj$result$EQM, xlab='p', ylab='EQM', type='b')
 ```
   
   
   (3) Refaça o item 2 utilizando o método de validação cruzada k-fold, com
   k = 5.
   
-```{r}
-# conjunto de teste e treino
-n <- nrow(db)
-set.seed(123)
-amostra_teste <- sample(1:n, size = n/5, replace = FALSE)
-df_treino <- db[-amostra_teste,]
-df_teste <- db[amostra_teste,]
-resultados <- data.frame(
-EQM_treino = numeric(0),
-EQM_teste = numeric(0)
-)
-```
-  
-  
-  (4) Com base nos métodos discutidos e nos resultados obtidos, qual subconjunto
-  das 300 variáveis você diria que possuem um efeito não nulo na resposta $y$?
+  (4) Com base nos métodos discutidos e nos resultados obtidos, qual subconjunto das 300 variáveis você diria que possuem um efeito não nulo na resposta $y$?
   
 # Parte 2 - LASSO
 
-Para essa parte, utilize a função `glmnet` do pacote `glmnet` para realizar
-ajustes utilizando o método LASSO.
+Para essa parte, utilize a função `glmnet` do pacote `glmnet` para realizar ajustes utilizando o método LASSO.
 
-  (1) Leia a documentação da função `glmnet` e a vignette disponível em
-  https://glmnet.stanford.edu/articles/glmnet.html. Descreva os principais
-  parâmetros da função que serão necessários para ajustar um modelo baseado
-  em LASSO para um determinado conjunto de dados.
-  
-  (2) Separe 10% do seu conjunto de dados como um conjunto de dados de teste.
-  Com os 90% restante (conjunto de treino), ajuste uma regressão com LASSO
-  considerando $\lambda = 2$. Calcule o Erro Quadrático Médio de predição
-  para o conjunto de treino e o conjunto de teste. Quantas variáveis
-  tiveram coeficientes não nulos para este ajuste?
-  
-  (3) Escolha (pelo menos) 10 valores de $\lambda$.
-  Para cada valor de $\lambda$, refaça o item (2), com os mesmos conjuntos
-  de treino/teste. Compare os erros de predição no teste para cada valor de
-  $\lambda$. Qual valor de $\lambda$ produziu o menor erro de predição?
+  (1) Leia a documentação da função `glmnet` e a vignette disponível em https://glmnet.stanford.edu/articles/glmnet.html. Descreva os principais parâmetros da função que serão necessários para ajustar um modelo baseado em LASSO para um determinado conjunto de dados.
 
-  (4) Considere os dados no arquivo `l1d1-val.csv`. Este conjunto de dados
-  não possui o valor da variável resposta. Gere um arquivo chamada `l1-pred-[grupo].csv`
-  contendo as predições para as 1000 observações disponíveis no arquivo, com
-  base no ajuste que você considera mais apropriado para fazer predições.
-  Substitua `[grupo]` pela letra associada ao grupo no Moodle.
+x: matriz de input de dimensão $n \times p$. Necessário que $p \geq 2$.
+
+y: variável resposta. o parâmetro `family` pode ser usado para especificar se a variável é quantitativa, de contagem, entre outros.
+
+alpha: faz uma "mistura" entre Lasso (`alpha = 1`) e Ridge (`alpha = 0`).
+
+  
+  (2) Separe 10% do seu conjunto de dados como um conjunto de dados de teste. Com os 90% restante (conjunto de treino), ajuste uma regressão com LASSO considerando $\lambda = 2$. Calcule o Erro Quadrático Médio de predição para o conjunto de treino e o conjunto de teste. Quantas variáveis tiveram coeficientes não nulos para este ajuste?
+  
+```{r}
+# packages
+library(glmnet)
+
+# separando dados
+# 0.9 * nrow(db)  # 90% = 4500 linhas
+# 0.1 * nrow(db)  # 10% =  500 linhas
+shuffle <- sample(rep(c(1,2), times = c(4500, 500)))
+treino <- db[shuffle == 1,]
+teste <- db[shuffle == 2,]
+
+# ajustando modelo
+
+```
+  
+  
+  (3) Escolha (pelo menos) 10 valores de $\lambda$. Para cada valor de $\lambda$, refaça o item (2), com os mesmos conjuntos de treino/teste. Compare os erros de predição no teste para cada valor de $\lambda$. Qual valor de $\lambda$ produziu o menor erro de predição?
+
+  (4) Considere os dados no arquivo `l1d1-val.csv`. Este conjunto de dados não possui o valor da variável resposta. Gere um arquivo chamada `l1-pred-[grupo].csv` contendo as predições para as 1000 observações disponíveis no arquivo, combase no ajuste que você considera mais apropriado para fazer predições. Substitua `[grupo]` pela letra associada ao grupo no Moodle.
