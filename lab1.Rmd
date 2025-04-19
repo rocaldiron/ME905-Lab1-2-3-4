@@ -39,7 +39,7 @@ O objetivo dessa parte é apresentar um modelo de regressão linear
   (escolha um dos métodos) para controlar o número de
   variáveis selecionadas.
 
-Utilizando a correção de Bonferroni
+Utilizando a correção de Bonferroni:
 
 ```{r}
 # leitura banco de dados
@@ -61,24 +61,21 @@ summary(model_reajustado)
   
 ```{r}
 fsr <- function(data, p_max = 40) {
-  # separando banco de dados 80/20
-  n_treino <- 0.8 * nrow(data)
-  n_teste <- 0.2 * nrow(data)
-  shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
-  treino <- db[shuffle == 1,]
-  teste <- db[shuffle == 2,]
-  names_pred <- names(data[-1])
+  # objetos
+  pred_selecionado <- character(p_max)  # vetor com o nome dos pred selecionados
+  EQM_pred <- numeric(p_max)            # salvar EQM minimo por iteração
   
-  # criando e definindo objetos
-  n <- nrow(data)
-  pred_selecionado <- character(p_max)
-  result <- data.frame(p = 1:p_max, EQM = rep(0, p_max),
-                           pred = character(p_max))
-  EQM_pred <- numeric(p_max)
+  # separando banco de dados em 80/20
+  n_treino <- 0.8 * nrow(data)   # 4000
+  n_teste <- 0.2 * nrow(data)    # 1000
+  shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
+  treino <- data[shuffle == 1,]  # 1 = treino
+  teste <- data[shuffle == 2,]   # 2 = teste
+  names_pred <- names(data[-1])  # nome de todas as preditoras
   
   for (p in 1:p_max) {
-    EQM <- vector(mode='numeric', p_max - p + 1)
-    names_pred <- setdiff(names_pred, pred_selecionado)
+    names_pred <- setdiff(names_pred, pred_selecionado)  # preditores não selecionados
+    EQM <- vector(mode='numeric', length(names_pred))
     j <- 1
     
     for (i in names_pred) {
@@ -90,21 +87,150 @@ fsr <- function(data, p_max = 40) {
     
     pred_selecionado[p] <- setdiff(names_pred, pred_selecionado)[which.min(EQM)]
     EQM_pred[p] <- sum(lm(y ~ ., teste[c('y', pred_selecionado[1:p])])$residuals^2)/n_teste
-    result[p,2:3] <- c(EQM_pred[p], pred_selecionado[p])
   }
-  return(list('preditores' = pred_selecionado,
-              'result' = result))
+  
+  result <- data.frame(p = 1:p_max, EQM = EQM_pred, pred = pred_selecionado)
+  return(list('preditores' = pred_selecionado, 'result' = result))
 }
 
+set.seed(282829)
 obj <- fsr(db, p_max = 5)
 
 knitr::kable(obj$result)
 plot(obj$result$p, obj$result$EQM, xlab='p', ylab='EQM', type='b')
 ```
+
+```{r, echo=F, eval=F}
+# Verificação manual da função fsr
+set.seed(282829)
+n_treino <- 0.8 * nrow(db)   # 4000
+n_teste <- 0.2 * nrow(db)    # 1000
+shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
+treino <- db[shuffle == 1,]  # 1 = treino
+teste <- db[shuffle == 2,]   # 2 = teste
+
+# i = 1
+EQM_1 <- numeric(300)
+j <- 1
+for (i in names(db[-1])) {
+  formula <- formula(paste(c('y ~', i), collapse = ' + '))
+  EQM_1[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+  j <- j + 1
+}
+names(db[-1])[which.min(EQM_1)]  # x236
+
+
+# i = 2
+EQM_2 <- numeric(299)
+j <- 1
+for (i in names(db[-1])) {
+  if (i == 'x236') next
+  formula <- formula(paste(c('y ~ x236', i), collapse = ' + '))
+  EQM_2[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+  j <- j + 1
+}
+names(db[-c(1, which(names(db) %in% c('x236')))])[which.min(EQM_2)]  # x212
+
+# i = 3
+EQM_3 <- numeric(298)
+j <- 1
+for (i in names(db[-1])) {
+  if (i %in% c('x236', 'x212')) next
+  formula <- formula(paste(c('y ~ x236 + x212', i), collapse = ' + '))
+  EQM_3[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+  j <- j + 1
+}
+names(db[-c(1, which(names(db) %in% c('x236', 'x212')))])[which.min(EQM_3)]  # x226
+```
+
+
+
+  (3) Refaça o item 2 utilizando o método de validação cruzada k-fold, com k = 5.
   
+```{r}
+fsr_cv <- function(data, p_max = 5, k = 5) {
+  # objetos
+  pred_selecionado <- character(p_max)  # vetor com o nome dos pred selecionados
   
-  (3) Refaça o item 2 utilizando o método de validação cruzada k-fold, com
-  k = 5.
+  # separação do banco de dados
+  n <- nrow(data)
+  shuffle <- sample(1:k, size = n, replace = T)
+  
+  for (p in 1:p_max) {
+    for (i in names_pred) {
+      
+    }
+  }
+  
+}
+
+cross_validation <- function(data, k = 5){
+  n <- nrow(data)
+  p <- ncol(data)
+ 
+  shuffle <- sample(rep(1:k, n/k))
+  EQM <- numeric(k)
+ 
+  for(i in 1:k) {
+    teste <- data[shuffle == i,]
+    treino <- data[shuffle != i,]
+   
+    modelo <- lm(y ~ ., treino)
+    pred <- predict(modelo, teste[,-1])
+   
+    EQM[i] <- (treino[1] - pred)^2/(n - p)
+  }
+ 
+  cv_EQM <- mean(EQM)
+  return(list(cv_EQM, EQM))
+}
+```
+  
+```{r, eval=F, echo=F}
+# testes, reproduzindo oq eu foi feito no sldie
+set.seed(2)
+n <- 5000
+X <- runif(n, min = 0, max = 100)
+f <- function(x){
+  150 + 10*cos(x/15)
+}
+y <- rnorm(n, mean = f(X), sd = 3)
+df <- data.frame(x = X, y = y)
+
+set.seed(1)
+K <- 10
+folds <- sample(1:K, size = n, replace = TRUE)
+
+resultados_kfold <- data.frame(
+  fold = integer(0),
+  grau = integer(0),
+  EQM_treino = numeric(0),
+  EQM_teste = numeric(0)
+)
+
+for(grau in 1:25) {
+  for(fold in 1:K) {
+    df_treino <- df[!folds == fold,]
+    df_teste <- df[folds == fold,]
+    ajuste <- lm(y ~ poly(x, grau), data = df_treino)
+    predicoes <- predict(ajuste, df_teste)
+    resultados_kfold <- rbind(resultados_kfold,
+                              data.frame(fold = fold, grau = grau,
+                                         EQM_treino = mean(ajuste$residuals^2),
+                                         EQM_teste = mean((df_teste$y - predicoes)^2)))
+  }
+}
+
+resultados_kfold |> head()
+
+resumo <- resultados_kfold |>
+group_by(grau) |>
+summarise_all(mean) |>
+select(-fold)
+
+resumo$grau[which.min(resumo$EQM_teste)]
+```
+  
   
   (4) Com base nos métodos discutidos e nos resultados obtidos, qual subconjunto das 300 variáveis você diria que possuem um efeito não nulo na resposta $y$?
   
@@ -141,4 +267,4 @@ teste <- db[shuffle == 2,]
   
   (3) Escolha (pelo menos) 10 valores de $\lambda$. Para cada valor de $\lambda$, refaça o item (2), com os mesmos conjuntos de treino/teste. Compare os erros de predição no teste para cada valor de $\lambda$. Qual valor de $\lambda$ produziu o menor erro de predição?
 
-  (4) Considere os dados no arquivo `l1d1-val.csv`. Este conjunto de dados não possui o valor da variável resposta. Gere um arquivo chamada `l1-pred-[grupo].csv` contendo as predições para as 1000 observações disponíveis no arquivo, combase no ajuste que você considera mais apropriado para fazer predições. Substitua `[grupo]` pela letra associada ao grupo no Moodle.
+  (4) Considere os dados no arquivo `l1d1-val.csv`. Este conjunto de dados não possui o valor da variável resposta. Gere um arquivo chamada `l1-pred-[grupo].csv` contendo as predições para as 1000 observações disponíveis no arquivo, com base no ajuste que você considera mais apropriado para fazer predições. Substitua `[grupo]` pela letra associada ao grupo no Moodle.
