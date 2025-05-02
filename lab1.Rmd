@@ -78,7 +78,7 @@ fsr <- function(data, p_max = 40) {
     EQM <- vector(mode='numeric', length(names_pred))
     j <- 1
     
-    for (i in names_pred) {
+    for (i in names_pred) {  # iterando nos preditores não selecionados
       formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
                                             collapse = ' + ')))
       EQM[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
@@ -86,7 +86,9 @@ fsr <- function(data, p_max = 40) {
     }
     
     pred_selecionado[p] <- setdiff(names_pred, pred_selecionado)[which.min(EQM)]
-    EQM_pred[p] <- sum(lm(y ~ ., teste[c('y', pred_selecionado[1:p])])$residuals^2)/n_teste
+    best_fit <- lm(y ~ ., treino[c('y', pred_selecionado[1:p])])
+    EQM_pred[p] <- sum((teste$y - predict(best_fit, newdata = teste))^2)/n_teste
+    # EQM_pred[p] <- sum(lm(y ~ ., teste[c('y', pred_selecionado[1:p])])$residuals^2)/n_teste
   }
   
   result <- data.frame(p = 1:p_max, EQM = EQM_pred, pred = pred_selecionado)
@@ -94,7 +96,7 @@ fsr <- function(data, p_max = 40) {
 }
 
 set.seed(282829)
-obj <- fsr(db, p_max = 5)
+obj <- fsr(db, p_max = 3)
 
 knitr::kable(obj$result)
 plot(obj$result$p, obj$result$EQM, xlab='p', ylab='EQM', type='b')
