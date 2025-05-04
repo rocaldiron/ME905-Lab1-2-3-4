@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # packages
 require(glmnet)
 require(readr)
+require(dplyr)
 ```
 
 # Instruções
@@ -60,46 +61,48 @@ summary(model_reajustado)
   um conjunto de dados de teste.
   
 ```{r}
+# data - banco de dados
+# p_max - quantidade de preditoras máxima no último modelo ajustado
+
 fsr <- function(data, p_max = 40) {
   # objetos
-  pred_selecionado <- character(p_max)  # vetor com o nome dos pred selecionados
-  EQM_pred <- numeric(p_max)            # salvar EQM minimo por iteração
+  pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
+  EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
   
   # separando banco de dados em 80/20
-  n_treino <- 0.8 * nrow(data)   # 4000
-  n_teste <- 0.2 * nrow(data)    # 1000
+  n_treino <- 0.8 * nrow(data)      # 4000
+  n_teste <- 0.2 * nrow(data)       # 1000
   shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
-  treino <- data[shuffle == 1,]  # 1 = treino
-  teste <- data[shuffle == 2,]   # 2 = teste
-  names_pred <- names(data[-1])  # nome de todas as preditoras
+  df_treino <- data[shuffle == 1,]  # 1 = treino
+  df_teste <- data[shuffle == 2,]   # 2 = teste
+  names_pred_all <- names(data[-1])     # nome de todas as preditoras
   
   for (p in 1:p_max) {
-    names_pred <- setdiff(names_pred, pred_selecionado)  # preditores não selecionados
-    EQM <- vector(mode='numeric', length(names_pred))
+    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    EQM_treino <- vector(mode='numeric', length(names_pred))
     j <- 1
     
     for (i in names_pred) {  # iterando nos preditores não selecionados
       formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
                                             collapse = ' + ')))
-      EQM[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+      EQM_treino[j] <- mean(lm(formula, df_treino)$residuals^2)
       j <- j + 1
     }
     
-    pred_selecionado[p] <- setdiff(names_pred, pred_selecionado)[which.min(EQM)]
-    best_fit <- lm(y ~ ., treino[c('y', pred_selecionado[1:p])])
-    EQM_pred[p] <- sum((teste$y - predict(best_fit, newdata = teste))^2)/n_teste
-    # EQM_pred[p] <- sum(lm(y ~ ., teste[c('y', pred_selecionado[1:p])])$residuals^2)/n_teste
+    pred_selecionado[p] <- names_pred[which.min(EQM_treino)]
+    best_fit <- lm(y ~ ., df_treino[c('y', pred_selecionado[1:p])])
+    EQM_teste[p] <- sum((df_teste$y - predict(best_fit, newdata = df_teste))^2)/n_teste
   }
   
-  result <- data.frame(p = 1:p_max, EQM = EQM_pred, pred = pred_selecionado)
+  result <- data.frame(p = 1:p_max, EQM = EQM_teste, pred = pred_selecionado)
   return(list('preditores' = pred_selecionado, 'result' = result))
 }
 
 set.seed(282829)
-obj <- fsr(db, p_max = 3)
+obj <- fsr(db, p_max = 5)
 
 knitr::kable(obj$result)
-plot(obj$result$p, obj$result$EQM, xlab='p', ylab='EQM', type='b')
+plot(obj$result$p, obj$result$EQM, xlab = 'p', ylab = 'EQM', type = 'b')
 ```
 
 ```{r, echo=F, eval=F}
@@ -150,46 +153,95 @@ names(db[-c(1, which(names(db) %in% c('x236', 'x212')))])[which.min(EQM_3)]  # x
   (3) Refaça o item 2 utilizando o método de validação cruzada k-fold, com k = 5.
   
 ```{r}
-fsr_cv <- function(data, p_max = 5, k = 5) {
+# cross_validation <- function(data, k = 5){
+#   n <- nrow(data)
+#   p <- ncol(data)
+#  
+#   shuffle <- sample(rep(1:k, n/k))
+#   EQM <- numeric(k)
+#  
+#   for(i in 1:k) {
+#     teste <- data[shuffle == i,]
+#     treino <- data[shuffle != i,]
+#    
+#     modelo <- lm(y ~ ., treino)
+#     pred <- predict(modelo, teste[,-1])
+#    
+#     EQM[i] <- (treino[1] - pred)^2/(n - p)
+#   }
+#  
+#   cv_EQM <- mean(EQM)
+#   return(list(cv_EQM, EQM))
+# }
+
+
+# data - banco de dados
+# p_max - quantidade de preditoras máxima no último modelo ajustado
+# k - quantidade de folds
+
+fsr_cv <- function(data, p_max = 40, k = 5) {
   # objetos
   pred_selecionado <- character(p_max)  # vetor com o nome dos pred selecionados
+  names_pred_all <- names(data[-1])     # nome de todas as preditoras
+  result <- data.frame(
+    p = 1:p_max,
+    preditor = character(p_max),
+    fold = integer(p_max),
+    EQM_treino = numeric(p_max),
+    EQM_teste = numeric(p_max)
+  )
   
   # separação do banco de dados
   n <- nrow(data)
   shuffle <- sample(1:k, size = n, replace = T)
   
   for (p in 1:p_max) {
-    for (i in names_pred) {
-      
+    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    j <- 1
+    result_parcial <- data.frame(
+      preditor = character(length(names_pred) * k),
+      fold = integer(length(names_pred) * k),
+      EQM_treino = numeric(length(names_pred) * k),
+      EQM_teste = numeric(length(names_pred) * k)
+    )
+
+    for (i in names_pred) {  # iterando nos preditores não selecionados
+      for (fold in 1:k) {  # iterando no k-ésimo fold
+        df_treino <- data[shuffle != fold,]
+        df_teste <- data[shuffle == fold,]
+        formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
+                                              collapse = ' + ')))
+        fit <- lm(formula, data = df_treino)
+        
+        result_parcial[j,] <-  data.frame(
+          preditor = i, fold = fold, EQM_treino = mean(fit$residuals^2),
+          EQM_teste = mean((df_teste$y - predict(fit, newdata = df_teste))^2)
+        )
+        j <- j + 1
+        # result[j,] <-  data.frame(
+        #   p = p, fold = fold, EQM_treino = mean(fit$residuals^2),
+        #   EQM_teste = mean((df_teste$y - predict(fit, newdata = df_teste))^2),
+        #   preditor = i
+        # )
+      }
     }
+    
+    estat_result <- result_parcial |>
+      group_by(preditor) |>
+      summarise_all(mean) |>
+      select(-fold)
+    pred_selecionado[p] <- estat_result$preditor[which.min(estat_result$EQM_treino)]
+    result[p,-1] <- estat_result[which.min(estat_result$EQM_treino),]
   }
   
+  return(result)
 }
 
-cross_validation <- function(data, k = 5){
-  n <- nrow(data)
-  p <- ncol(data)
- 
-  shuffle <- sample(rep(1:k, n/k))
-  EQM <- numeric(k)
- 
-  for(i in 1:k) {
-    teste <- data[shuffle == i,]
-    treino <- data[shuffle != i,]
-   
-    modelo <- lm(y ~ ., treino)
-    pred <- predict(modelo, teste[,-1])
-   
-    EQM[i] <- (treino[1] - pred)^2/(n - p)
-  }
- 
-  cv_EQM <- mean(EQM)
-  return(list(cv_EQM, EQM))
-}
+a <- fsr_cv(db, p_max = 2)
 ```
   
 ```{r, eval=F, echo=F}
-# testes, reproduzindo oq eu foi feito no sldie
+# testes, reproduzindo o que foi feito no slide
 set.seed(2)
 n <- 5000
 X <- runif(n, min = 0, max = 100)
