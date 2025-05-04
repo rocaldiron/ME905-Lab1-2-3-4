@@ -75,7 +75,7 @@ fsr <- function(data, p_max = 40) {
   shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
   df_treino <- data[shuffle == 1,]  # 1 = treino
   df_teste <- data[shuffle == 2,]   # 2 = teste
-  names_pred_all <- names(data[-1])     # nome de todas as preditoras
+  names_pred_all <- names(data[-1]) # nome de todas as preditoras
   
   for (p in 1:p_max) {
     names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
@@ -99,7 +99,7 @@ fsr <- function(data, p_max = 40) {
 }
 
 set.seed(282829)
-obj <- fsr(db, p_max = 5)
+obj <- fsr(db, p_max = 30)
 
 knitr::kable(obj$result)
 plot(obj$result$p, obj$result$EQM, xlab = 'p', ylab = 'EQM', type = 'b')
@@ -153,28 +153,6 @@ names(db[-c(1, which(names(db) %in% c('x236', 'x212')))])[which.min(EQM_3)]  # x
   (3) Refaça o item 2 utilizando o método de validação cruzada k-fold, com k = 5.
   
 ```{r}
-# cross_validation <- function(data, k = 5){
-#   n <- nrow(data)
-#   p <- ncol(data)
-#  
-#   shuffle <- sample(rep(1:k, n/k))
-#   EQM <- numeric(k)
-#  
-#   for(i in 1:k) {
-#     teste <- data[shuffle == i,]
-#     treino <- data[shuffle != i,]
-#    
-#     modelo <- lm(y ~ ., treino)
-#     pred <- predict(modelo, teste[,-1])
-#    
-#     EQM[i] <- (treino[1] - pred)^2/(n - p)
-#   }
-#  
-#   cv_EQM <- mean(EQM)
-#   return(list(cv_EQM, EQM))
-# }
-
-
 # data - banco de dados
 # p_max - quantidade de preditoras máxima no último modelo ajustado
 # k - quantidade de folds
@@ -186,7 +164,6 @@ fsr_cv <- function(data, p_max = 40, k = 5) {
   result <- data.frame(
     p = 1:p_max,
     preditor = character(p_max),
-    fold = integer(p_max),
     EQM_treino = numeric(p_max),
     EQM_teste = numeric(p_max)
   )
@@ -218,11 +195,6 @@ fsr_cv <- function(data, p_max = 40, k = 5) {
           EQM_teste = mean((df_teste$y - predict(fit, newdata = df_teste))^2)
         )
         j <- j + 1
-        # result[j,] <-  data.frame(
-        #   p = p, fold = fold, EQM_treino = mean(fit$residuals^2),
-        #   EQM_teste = mean((df_teste$y - predict(fit, newdata = df_teste))^2),
-        #   preditor = i
-        # )
       }
     }
     
@@ -237,7 +209,7 @@ fsr_cv <- function(data, p_max = 40, k = 5) {
   return(result)
 }
 
-a <- fsr_cv(db, p_max = 2)
+a <- fsr_cv(db, p_max = 3)
 ```
   
 ```{r, eval=F, echo=F}
@@ -299,6 +271,8 @@ x: matriz de input de dimensão $n \times p$. Necessário que $p \geq 2$.
 y: variável resposta. o parâmetro `family` pode ser usado para especificar se a variável é quantitativa, de contagem, entre outros.
 
 alpha: faz uma "mistura" entre Lasso (`alpha = 1`) e Ridge (`alpha = 0`).
+
+lamdda: parâmetro de penalização do LASSO. Quanto maior o seu valor, mais os coeficientes são encolhidos.
 
   
   (2) Separe 10% do seu conjunto de dados como um conjunto de dados de teste. Com os 90% restante (conjunto de treino), ajuste uma regressão com LASSO considerando $\lambda = 2$. Calcule o Erro Quadrático Médio de predição para o conjunto de treino e o conjunto de teste. Quantas variáveis tiveram coeficientes não nulos para este ajuste?
