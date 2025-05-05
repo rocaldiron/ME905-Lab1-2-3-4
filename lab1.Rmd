@@ -265,7 +265,44 @@ resumo$grau[which.min(resumo$EQM_teste)]
   
   
   (4) Com base nos métodos discutidos e nos resultados obtidos, qual subconjunto das 300 variáveis você diria que possuem um efeito não nulo na resposta $y$?
+
+A validação cruzada e o método holdout apontam que a quantidade ideal de variáveis importantes para predição é 21, dessa forma faz-se necessário buscar o modelo com 21 variáveis sub-ótimo utilizando todo o dataset, que pode ser obtido por forward stepwise regression.
+
+```{r}
+fsr_final <- function(data, p_max = 40) {
+  # objetos
+  pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
+  EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
+  names_pred_all <- names(data[-1]) # nome de todas as preditoras
   
+  for (p in 1:p_max) {
+    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    EQM <- vector(mode='numeric', length(names_pred))
+    j <- 1
+    
+    for (i in names_pred) {  # iterando nos preditores não selecionados
+      formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
+                                            collapse = ' + ')))
+      EQM[j] <- mean(lm(formula, data)$residuals^2)
+      j <- j + 1
+    }
+    
+    pred_selecionado[p] <- names_pred[which.min(EQM)]
+    best_fit <- lm(y ~ ., data[c('y', pred_selecionado[1:p])])
+  }
+  
+  result <- data.frame(p = 1:p_max, pred = pred_selecionado)
+  return(pred_selecionado)
+}
+obj2 <- fsr_final(db,21)
+```
+
+Com isso temos o conjunto de variáveis com efeito não nulo na resposta:
+
+```{r}
+obj2
+```
+
 # Parte 2 - LASSO
 
 Para essa parte, utilize a função `glmnet` do pacote `glmnet` para realizar ajustes utilizando o método LASSO.
