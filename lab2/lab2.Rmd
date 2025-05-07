@@ -1,0 +1,138 @@
+---
+title: "Laboratório 2 - Métodos Baseados em Árvores e Florestas Aleatórias"
+author: "ME905"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# packages
+library(rpart)
+library(ggplot2)
+library(dplyr)
+```
+
+# 1. Leitura dos Dados
+```{r}
+# lendo dados
+library(readr)
+mnist <- read_csv("MNIST0178.csv")
+mnist$y <- as.factor(mnist$y)
+```
+
+
+# 2. Visualização de Dígitos
+
+## a)
+```{r}
+# visualizando dados
+converte_df <- function(vetor_covariaveis){
+  vetor_covariaveis <- as.vector(unlist(vetor_covariaveis))
+  if(length(vetor_covariaveis) != 784){
+    stop("Passe um vetor com 784 valores!")
+  }
+  
+  pos_x <- rep(1:28, each = 28)
+  pos_y <- rep(1:28, times = 28)
+  data.frame(pos_x, pos_y, valor = vetor_covariaveis)
+}
+
+visnum <- function(df){
+  df %>% ggplot(aes(x = pos_y, y = pos_x, fill = valor)) +
+    geom_tile() +
+    scale_fill_gradient(low = "white", high = "black") +
+    theme_void() +
+    scale_y_reverse()
+}
+
+# lendo números
+n1 <- converte_df(mnist[1,-1])
+n2 <- converte_df(mnist[3,-1])
+n3 <- converte_df(mnist[6,-1])
+n4 <- converte_df(mnist[7,-1])
+
+visnum(n1)  # 0
+visnum(n2)  # 1
+visnum(n3)  # 7
+visnum(n4)  # 8
+```
+
+Vemos os números 0, 1, 7 e 8, respectivamente.
+
+## b)
+Possívelmente, os números mais difíceis de serem distinguidos são os dígitos 1 e 7 pela sua semelhança e,analogamente, teremos menos dificuldade entre o 0 e o 8 com relação aos demais.
+
+
+# 3. Árvore de Classificação com rpart
+
+```{r}
+fit <- rpart(y ~ ., data = mnist)
+pred <- predict(fit, type = 'class')
+
+table('Predição' = pred, 'Valores Verdadeiros' = mnist$y)
+sum(pred == mnist$y)/length(mnist$y)
+```
+
+Houve uma acurácia de aproximadamente 90%, então a árvore foi eficaz. No entanto, nossa conjectura não se provou verdadeira, veja que o 1 e o 7 foram mais confundidos com o 8 e o 8 foi mais confundido com o 1. Contudo, como nossas suspeitas, o 0 foi mais confundido com o 8.
+
+
+# 4. Florestas Aleatórias (com Estratégias Manuais)
+
+```{r}
+# seleciona colunas do banco de dados ------------------------------------------
+# data banco de dados com a primeira coluna sendo a resposta.
+# p número de variáveis selecionadas. Se não especificada, será usado a raíz
+# quadrada da quantidade de preditoras no banco de dados.
+
+select_cols <- function(data, p = NULL) {
+  if (is.null(p)) p <- round(sqrt(ncol(data)))
+  p_tot <- ncol(data)  # total de variáveis
+  select_var <- c(1, sample(2:p_tot, p))  # variáveis selecionadas
+  return(data[select_var])
+}
+
+# bootstrap --------------------------------------------------------------------
+# data banco de dados com a primeira coluna sendo a resposta.
+bs <- function(data) {
+  return(sample(1:nrow(data), nrow(data), replace = T))
+}
+
+# gera floresta aleatória ------------------------------------------------------
+# data banco de dados com a primeira coluna sendo a resposta.
+# tree quantidade de árvores de decisão da floresta.
+random_forest <- function(data, tree, ...) {
+  # controle <- rpart.control(...)
+  
+  # criando objetos
+  floresta <- vector(mode = 'list', length = tree)
+  OOBE <- numeric(tree)
+  
+  for (i in 1:tree) {
+    linhas_sorteadas <- bs(data)
+    db_bs <- (data |>
+      select_cols())[linhas_sorteadas,]
+    
+    floresta[[i]] <- rpart(y ~ ., db_bs)
+    OOBE[i] <- mean(predict(floresta[[i]], type = 'class',
+                       newdata = data[-unique(linhas_sorteadas),]) ==
+      data[-unique(linhas_sorteadas),1])  # possível erro
+  }
+  return(floresta)
+}
+
+a <- random_forest(mnist, tree=2)
+
+```
+
+
+
+
+
+
+
+
+
+
