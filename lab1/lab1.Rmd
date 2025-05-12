@@ -107,6 +107,48 @@ knitr::kable(obj$result)
 plot(obj$result$p, obj$result$EQM, xlab = 'p', ylab = 'EQM', type = 'b')
 ```
 
+```{r, eval = F}
+# alternativa teste
+set.seed(282829)
+
+fsr_alt <- function(data_treino, data_teste, p_max = 40) {
+  # objetos
+  pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
+  EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
+  EQM_treino_min <- numeric(p_max)       # salva o EQM treino
+  
+  names_pred_all <- names(data_treino[-1]) # nome de todas as preditoras
+  
+  for (p in 1:p_max) {
+    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    EQM_treino <- vector(mode='numeric', length(names_pred))
+    j <- 1
+    
+    for (i in names_pred) {  # iterando nos preditores não selecionados
+      formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
+                                            collapse = ' + ')))
+      EQM_treino[j] <- mean(lm(formula, data_treino)$residuals^2)
+      j <- j + 1
+    }
+    
+    EQM_treino_min[p] <- min(EQM_treino)
+    pred_selecionado[p] <- names_pred[which.min(EQM_treino)]
+    best_fit <- lm(y ~ ., data_treino[c('y', pred_selecionado[1:p])])
+    EQM_teste[p] <- sum((data_teste$y - predict(best_fit, newdata =
+                                                data_teste))^2)/nrow(data_teste)
+  }
+  
+  result <- data.frame(p = 1:p_max, EQM_treino = EQM_treino_min,
+                       EQM_teste = EQM_teste, pred = pred_selecionado)
+  return(list('preditores' = pred_selecionado, 'result' = result))
+}
+
+shuffle <- sample(rep(c(1,2), times = c(4000, 1000)))
+
+obj_test <- fsr_alt(db[shuffle == 1,], db[shuffle == 2,], p_max = 10)
+```
+
+
 Na tabela e no gráfico, temos o erro de predição para o melhor modelo com p parâmetros, é possível reparar que a partir de 21 variáveis o erro de predição começa a cair de maneira extremamente lenta, e até mesmo começa a subir conforme o número de variáveis aumenta, um bom indicativo de limite de complexidade do modelo.
 
 ```{r, echo=F, eval=F}
@@ -217,6 +259,19 @@ fsr_cv <- function(data, p_max = 40, k = 5) {
 
 a <- fsr_cv(db, p_max = 3)
 ```
+  
+```{r}
+# testes
+k <- 5
+shuffle <- sample(1:k, size = nrow(db), replace = T)
+
+aa <- vector(mode = 'list', length = k)
+
+for (i in 1:k) {
+  aa[[i]] <- fsr_alt(db[shuffle != i,], db[shuffle == i,], p_max = 10)
+}
+```
+  
   
 ```{r, eval=F, echo=F}
 # testes, reproduzindo o que foi feito no slide
@@ -341,8 +396,6 @@ pred_teste <- predict(modelasso, newx = as.matrix(teste[,-1]), s = 2)
 # EQM
 eqm_treino <- mean((as.matrix(treino[,1]) - pred_treino)^2)
 eqm_teste <- mean((as.matrix(teste[,1]) - pred_teste)^2)
-#eqm_treino
-#eqm_teste
 
 # quantidade de variáveis com coeficientes não nulos
 qnt_var_coef_nao__nulo <- sum(coef(modelasso) != 0)
@@ -357,10 +410,11 @@ lambda <- c(0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.75, 1, 1.5, 3)
 pred_treino_grid <- matrix(0, nrow = nrow(treino), ncol = length(lambda))
 pred_teste_grid <- matrix(0, nrow = nrow(teste), ncol = length(lambda)) 
 eqm_treino_grid <- numeric(10)
-eqm_teste_grid <- numeric(10)   
+eqm_teste_grid <- numeric(10)
 
 for (i in 1:length(lambda)){
-  fit <-  glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]), alpha = 1, lambda = lambda[i])
+  fit <-  glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]),
+                 alpha = 1, lambda = lambda[i])
   pred_treino_grid[,i] <- predict(fit, newx = as.matrix(treino[,-1]), s = lambda[i])
   pred_teste_grid[,i] <- predict(fit, newx = as.matrix(teste[,-1]), s = lambda[i])
 
@@ -370,8 +424,6 @@ for (i in 1:length(lambda)){
   grid <- cbind(eqm_treino_grid, eqm_teste_grid, lambda)
   min_eqm_lambda_treino <- lambda[which.min(eqm_treino_grid)]
   min_eqm_lambda_teste <- lambda[which.min(eqm_teste_grid)]
-  #min_eqm_lambda_treino
-  #min_eqm_lambda_teste
 ```
 O lambda que produziu o menor erro de predição foi o $\lambda =$ `r min_eqm_lambda_teste` que minimiza o erro para o conjunto de teste (o mais importante para avaliar performance de predição), e coincidentemente também o de treino. o erro obtido foi de `r min(eqm_teste_grid)` no conjunto de teste.
 
@@ -380,7 +432,8 @@ O lambda que produziu o menor erro de predição foi o $\lambda =$ `r min_eqm_la
 ```{r}
 db_final <- read_csv("l1d1-val.csv")
 
-best_modelasso <- glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]), alpha = 1, lambda = 0.01)
+best_modelasso <- glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]),
+                         alpha = 1, lambda = 0.01)
 pred_best_modelasso <- predict(best_modelasso, newx = as.matrix(db_final), s = 0.01)
 
 write.csv(pred_best_modelasso, "l1-pred-J.csv")
