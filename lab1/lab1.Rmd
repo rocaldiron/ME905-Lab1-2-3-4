@@ -1,0 +1,388 @@
+---
+title: "Laboratório 1 - Validação Cruzada e Seleção de Variáveis"
+author: "ME905"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# packages
+require(glmnet)
+require(readr)
+require(dplyr)
+```
+
+# Instruções
+
+- Esta atividade contém duas partes com o mesmo peso na avaliação.
+
+- Junto do código em cada item, descreva em forma de texto o método sendo
+utilizado e discuta os resultados.
+Apresente equações se achar necessário.
+
+- Apresente respostas completas e apresente gráficos se achar necessário.
+
+- A menos quando especificado, evite utilizar funções "prontas" para tarefas
+que podem ser feitas utilizando a sintaxe básica do R. Por exemplo, a
+separação dos bancos de dados em treino e teste deve ser implementada
+sem funções de pacotes.
+
+# Parte 1 - Seleção de Variáveis
+
+O conjunto de dados `l1d1.csv` contém informações de 300 variáveis
+(`x001` a `x300`) e uma variável resposta `y` (contínua) para 5000 observações.
+O objetivo dessa parte é apresentar um modelo de regressão linear
+(perda quadrática) com algum subconjunto das 300 variáveis disponíveis.
+
+  (1) Obtenha um conjunto de variáveis com efeito significativo na resposta
+  com base em testes de hipóteses. Faça os ajustes necessários
+  (escolha um dos métodos) para controlar o número de
+  variáveis selecionadas.
+
+Utilizando a correção de Bonferroni, temos que $\alpha^*=\frac{\alpha}{300}$:
+
+```{r}
+# leitura banco de dados
+db <- read_csv("l1d1.csv")
+db_val <- read_csv("l1d1-val.csv")
+
+model <- lm(y ~., data = db)
+
+ajuste <- summary(model)
+ajuste$coefficients[ajuste$coefficients[, 4] < 0.05/300, 4]
+
+model_reajustado <- lm(y ~ ., data = db[c(1, which(ajuste$coefficients[,4] < 0.05/300))])
+summary(model_reajustado)
+```
+
+  (2) Implemente o método *Forward Stepwise Regression* e obtenha o conjunto
+  de variáveis que minimiza o erro de predição sob perda quadrática para
+  um conjunto de dados de teste.
+
+O método forward stepwise regression baseia-se em buscar o melhor subconjunto de variáveis (de acordo com alguma métrica, como EQM) de maneira recursiva (ou gulosa), sendo assim calculamos o melhor modelo com um parâmetro, depois o melhor modelo com dois parâmetros dado o melhor modelo com um parâmetro, e assim por diante. A separação do conjunto de dados entre treino e teste e a avaliação do erro de predição auxilia na escolha da melhor quantidade de variáveis dentre os melhores subconjuntos.
+
+```{r}
+# data - banco de dados
+# p_max - quantidade de preditoras máxima no último modelo ajustado
+
+fsr <- function(data, p_max = 40) {
+  # objetos
+  pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
+  EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
+  
+  # separando banco de dados em 80/20
+  n_treino <- 0.8 * nrow(data)      # 4000
+  n_teste <- 0.2 * nrow(data)       # 1000
+  shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
+  df_treino <- data[shuffle == 1,]  # 1 = treino
+  df_teste <- data[shuffle == 2,]   # 2 = teste
+  names_pred_all <- names(data[-1]) # nome de todas as preditoras
+  
+  for (p in 1:p_max) {
+    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    EQM_treino <- vector(mode='numeric', length(names_pred))
+    j <- 1
+    
+    for (i in names_pred) {  # iterando nos preditores não selecionados
+      formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
+                                            collapse = ' + ')))
+      EQM_treino[j] <- mean(lm(formula, df_treino)$residuals^2)
+      j <- j + 1
+    }
+    
+    pred_selecionado[p] <- names_pred[which.min(EQM_treino)]
+    best_fit <- lm(y ~ ., df_treino[c('y', pred_selecionado[1:p])])
+    EQM_teste[p] <- sum((df_teste$y - predict(best_fit, newdata = df_teste))^2)/n_teste
+  }
+  
+  result <- data.frame(p = 1:p_max, EQM = EQM_teste, pred = pred_selecionado)
+  return(list('preditores' = pred_selecionado, 'result' = result))
+}
+
+set.seed(282829)
+obj <- fsr(db, p_max = 30)
+
+knitr::kable(obj$result)
+plot(obj$result$p, obj$result$EQM, xlab = 'p', ylab = 'EQM', type = 'b')
+```
+
+Na tabela e no gráfico, temos o erro de predição para o melhor modelo com p parâmetros, é possível reparar que a partir de 21 variáveis o erro de predição começa a cair de maneira extremamente lenta, e até mesmo começa a subir conforme o número de variáveis aumenta, um bom indicativo de limite de complexidade do modelo.
+
+```{r, echo=F, eval=F}
+# Verificação manual da função fsr
+set.seed(282829)
+n_treino <- 0.8 * nrow(db)   # 4000
+n_teste <- 0.2 * nrow(db)    # 1000
+shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
+treino <- db[shuffle == 1,]  # 1 = treino
+teste <- db[shuffle == 2,]   # 2 = teste
+
+# i = 1
+EQM_1 <- numeric(300)
+j <- 1
+for (i in names(db[-1])) {
+  formula <- formula(paste(c('y ~', i), collapse = ' + '))
+  EQM_1[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+  j <- j + 1
+}
+names(db[-1])[which.min(EQM_1)]  # x236
+
+
+# i = 2
+EQM_2 <- numeric(299)
+j <- 1
+for (i in names(db[-1])) {
+  if (i == 'x236') next
+  formula <- formula(paste(c('y ~ x236', i), collapse = ' + '))
+  EQM_2[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+  j <- j + 1
+}
+names(db[-c(1, which(names(db) %in% c('x236')))])[which.min(EQM_2)]  # x212
+
+# i = 3
+EQM_3 <- numeric(298)
+j <- 1
+for (i in names(db[-1])) {
+  if (i %in% c('x236', 'x212')) next
+  formula <- formula(paste(c('y ~ x236 + x212', i), collapse = ' + '))
+  EQM_3[j] <- sum(lm(formula, treino)$residuals^2)/n_treino
+  j <- j + 1
+}
+names(db[-c(1, which(names(db) %in% c('x236', 'x212')))])[which.min(EQM_3)]  # x226
+```
+
+
+
+  (3) Refaça o item 2 utilizando o método de validação cruzada k-fold, com k = 5.
+
+Na validação cruzada o objetivo continua sendo operacionalizar a escolha do melhor número de variáveis dentre os melhores subconjuntos, tendo em vista predição; com a diferença que ao invés de confiar em apenas uma medida de um split, obtemos a média de 5 diferentes medidas de erro de predição vindas de 5 partições nos dados, por exemplo.
+
+```{r}
+# data - banco de dados
+# p_max - quantidade de preditoras máxima no último modelo ajustado
+# k - quantidade de folds
+
+fsr_cv <- function(data, p_max = 40, k = 5) {
+  # objetos
+  pred_selecionado <- character(p_max)  # vetor com o nome dos pred selecionados
+  names_pred_all <- names(data[-1])     # nome de todas as preditoras
+  result <- data.frame(
+    p = 1:p_max,
+    preditor = character(p_max),
+    EQM_treino = numeric(p_max),
+    EQM_teste = numeric(p_max)
+  )
+  
+  # separação do banco de dados
+  n <- nrow(data)
+  shuffle <- sample(1:k, size = n, replace = T)
+  
+  for (p in 1:p_max) {
+    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    j <- 1
+    result_parcial <- data.frame(
+      preditor = character(length(names_pred) * k),
+      fold = integer(length(names_pred) * k),
+      EQM_treino = numeric(length(names_pred) * k),
+      EQM_teste = numeric(length(names_pred) * k)
+    )
+
+    for (i in names_pred) {  # iterando nos preditores não selecionados
+      for (fold in 1:k) {  # iterando no k-ésimo fold
+        df_treino <- data[shuffle != fold,]
+        df_teste <- data[shuffle == fold,]
+        formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
+                                              collapse = ' + ')))
+        fit <- lm(formula, data = df_treino)
+        
+        result_parcial[j,] <-  data.frame(
+          preditor = i, fold = fold, EQM_treino = mean(fit$residuals^2),
+          EQM_teste = mean((df_teste$y - predict(fit, newdata = df_teste))^2)
+        )
+        j <- j + 1
+      }
+    }
+    
+    estat_result <- result_parcial |>
+      group_by(preditor) |>
+      summarise_all(mean) |>
+      select(-fold)
+    pred_selecionado[p] <- estat_result$preditor[which.min(estat_result$EQM_treino)]
+    result[p,-1] <- estat_result[which.min(estat_result$EQM_treino),]
+  }
+  
+  return(result)
+}
+
+a <- fsr_cv(db, p_max = 3)
+```
+  
+```{r, eval=F, echo=F}
+# testes, reproduzindo o que foi feito no slide
+set.seed(2)
+n <- 5000
+X <- runif(n, min = 0, max = 100)
+f <- function(x){
+  150 + 10*cos(x/15)
+}
+y <- rnorm(n, mean = f(X), sd = 3)
+df <- data.frame(x = X, y = y)
+
+set.seed(1)
+K <- 10
+folds <- sample(1:K, size = n, replace = TRUE)
+
+resultados_kfold <- data.frame(
+  fold = integer(0),
+  grau = integer(0),
+  EQM_treino = numeric(0),
+  EQM_teste = numeric(0)
+)
+
+for(grau in 1:25) {
+  for(fold in 1:K) {
+    df_treino <- df[!folds == fold,]
+    df_teste <- df[folds == fold,]
+    ajuste <- lm(y ~ poly(x, grau), data = df_treino)
+    predicoes <- predict(ajuste, df_teste)
+    resultados_kfold <- rbind(resultados_kfold,
+                              data.frame(fold = fold, grau = grau,
+                                         EQM_treino = mean(ajuste$residuals^2),
+                                         EQM_teste = mean((df_teste$y - predicoes)^2)))
+  }
+}
+
+resultados_kfold |> head()
+
+resumo <- resultados_kfold |>
+group_by(grau) |>
+summarise_all(mean) |>
+select(-fold)
+
+resumo$grau[which.min(resumo$EQM_teste)]
+```
+  
+  
+  (4) Com base nos métodos discutidos e nos resultados obtidos, qual subconjunto das 300 variáveis você diria que possuem um efeito não nulo na resposta $y$?
+
+A validação cruzada e o método holdout apontam que a quantidade ideal de variáveis importantes para predição é 21, dessa forma faz-se necessário buscar o modelo com 21 variáveis sub-ótimo utilizando todo o dataset, que pode ser obtido por forward stepwise regression.
+
+```{r}
+fsr_final <- function(data, p_max = 40) {
+  # objetos
+  pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
+  EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
+  names_pred_all <- names(data[-1]) # nome de todas as preditoras
+  
+  for (p in 1:p_max) {
+    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    EQM <- vector(mode='numeric', length(names_pred))
+    j <- 1
+    
+    for (i in names_pred) {  # iterando nos preditores não selecionados
+      formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
+                                            collapse = ' + ')))
+      EQM[j] <- mean(lm(formula, data)$residuals^2)
+      j <- j + 1
+    }
+    
+    pred_selecionado[p] <- names_pred[which.min(EQM)]
+    best_fit <- lm(y ~ ., data[c('y', pred_selecionado[1:p])])
+  }
+  
+  result <- data.frame(p = 1:p_max, pred = pred_selecionado)
+  return(pred_selecionado)
+}
+obj2 <- fsr_final(db,21)
+```
+
+Com isso temos o conjunto de variáveis com efeito não nulo na resposta:
+
+```{r}
+obj2
+```
+
+# Parte 2 - LASSO
+
+Para essa parte, utilize a função `glmnet` do pacote `glmnet` para realizar ajustes utilizando o método LASSO.
+
+  (1) Leia a documentação da função `glmnet` e a vignette disponível em https://glmnet.stanford.edu/articles/glmnet.html. Descreva os principais parâmetros da função que serão necessários para ajustar um modelo baseado em LASSO para um determinado conjunto de dados.
+
+x: matriz de input de dimensão $n \times p$. Necessário que $p \geq 2$.
+
+y: variável resposta. o parâmetro `family` pode ser usado para especificar se a variável é quantitativa, de contagem, entre outros.
+
+alpha: faz uma "mistura" entre Lasso (`alpha = 1`) e Ridge (`alpha = 0`).
+
+lamdda: parâmetro de penalização do LASSO. Quanto maior o seu valor, mais os coeficientes são encolhidos.
+
+  
+  (2) Separe 10% do seu conjunto de dados como um conjunto de dados de teste. Com os 90% restante (conjunto de treino), ajuste uma regressão com LASSO considerando $\lambda = 2$. Calcule o Erro Quadrático Médio de predição para o conjunto de treino e o conjunto de teste. Quantas variáveis tiveram coeficientes não nulos para este ajuste?
+
+Na regressão LASSO incluímos um termo de penalização de norma 1 na função de loss: $\lambda\sum_{j = 1}^p|\beta_j|$. De maneira que os coeficientes dos parâmetros são encolhidos, e muitas vezes até zerados, auxiliando na predição e na seleção de variáveis. Para $\lambda = 2$ fixado temos:
+
+```{r}
+# separando dados
+# 0.9 * nrow(db)  # 90% = 4500 linhas
+# 0.1 * nrow(db)  # 10% =  500 linhas
+#set.seed(123)
+shuffle <- sample(rep(c(1,2), times = c(4500, 500)))
+treino <- db[shuffle == 1,]
+teste <- db[shuffle == 2,]
+
+# ajustando modelo
+modelasso <- glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]), alpha = 1, lambda = 2)
+
+# predições
+pred_treino <- predict(modelasso, newx = as.matrix(treino[,-1]), s = 2)
+pred_teste <- predict(modelasso, newx = as.matrix(teste[,-1]), s = 2)
+
+# EQM
+eqm_treino <- mean((as.matrix(treino[,1]) - pred_treino)^2)
+eqm_teste <- mean((as.matrix(teste[,1]) - pred_teste)^2)
+#eqm_treino
+#eqm_teste
+
+# quantidade de variáveis com coeficientes não nulos
+qnt_var_coef_nao__nulo <- sum(coef(modelasso) != 0)
+```
+
+O erro quadrático médio de predição para o conjunto de dados de treino foi `r eqm_treino`, e para o conjunto de dados de teste foi `r eqm_treino`. a quantidade de variáveis com coeficiente não nulo foi `r qnt_var_coef_nao__nulo`.
+  
+  (3) Escolha (pelo menos) 10 valores de $\lambda$. Para cada valor de $\lambda$, refaça o item (2), com os mesmos conjuntos de treino/teste. Compare os erros de predição no teste para cada valor de $\lambda$. Qual valor de $\lambda$ produziu o menor erro de predição?
+  
+```{r}
+lambda <- c(0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.75, 1, 1.5, 3)
+pred_treino_grid <- matrix(0, nrow = nrow(treino), ncol = length(lambda))
+pred_teste_grid <- matrix(0, nrow = nrow(teste), ncol = length(lambda)) 
+eqm_treino_grid <- numeric(10)
+eqm_teste_grid <- numeric(10)   
+
+for (i in 1:length(lambda)){
+  fit <-  glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]), alpha = 1, lambda = lambda[i])
+  pred_treino_grid[,i] <- predict(fit, newx = as.matrix(treino[,-1]), s = lambda[i])
+  pred_teste_grid[,i] <- predict(fit, newx = as.matrix(teste[,-1]), s = lambda[i])
+
+  eqm_treino_grid[i] <- mean((as.matrix(treino[,1]) - pred_treino_grid[,i])^2)
+  eqm_teste_grid[i] <- mean((as.matrix(teste[,1]) - pred_teste_grid[,i])^2)
+}
+  grid <- cbind(eqm_treino_grid, eqm_teste_grid, lambda)
+  min_eqm_lambda_treino <- lambda[which.min(eqm_treino_grid)]
+  min_eqm_lambda_teste <- lambda[which.min(eqm_teste_grid)]
+  #min_eqm_lambda_treino
+  #min_eqm_lambda_teste
+```
+O lambda que produziu o menor erro de predição foi o $\lambda =$ `r min_eqm_lambda_teste` que minimiza o erro para o conjunto de teste (o mais importante para avaliar performance de predição), e coincidentemente também o de treino. o erro obtido foi de `r min(eqm_teste_grid)` no conjunto de teste.
+
+  (4) Considere os dados no arquivo `l1d1-val.csv`. Este conjunto de dados não possui o valor da variável resposta. Gere um arquivo chamada `l1-pred-[grupo].csv` contendo as predições para as 1000 observações disponíveis no arquivo, com base no ajuste que você considera mais apropriado para fazer predições. Substitua `[grupo]` pela letra associada ao grupo no Moodle.
+  
+```{r}
+db_final <- read_csv("l1d1-val.csv")
+
+best_modelasso <- glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]), alpha = 1, lambda = 0.01)
+pred_best_modelasso <- predict(best_modelasso, newx = as.matrix(db_final), s = 0.01)
+
+write.csv(pred_best_modelasso, "l1-pred-J.csv")
+```
+  
