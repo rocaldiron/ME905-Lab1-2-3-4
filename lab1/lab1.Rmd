@@ -63,55 +63,11 @@ summary(model_reajustado)
 O método forward stepwise regression baseia-se em buscar o melhor subconjunto de variáveis (de acordo com alguma métrica, como EQM) de maneira recursiva (ou gulosa), sendo assim calculamos o melhor modelo com um parâmetro, depois o melhor modelo com dois parâmetros dado o melhor modelo com um parâmetro, e assim por diante. A separação do conjunto de dados entre treino e teste e a avaliação do erro de predição auxilia na escolha da melhor quantidade de variáveis dentre os melhores subconjuntos.
 
 ```{r}
-# data - banco de dados
+# data_treino - banco de dados para treino
+# data_teste - banco de dados para teste
 # p_max - quantidade de preditoras máxima no último modelo ajustado
 
-fsr <- function(data, p_max = 40) {
-  # objetos
-  pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
-  EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
-  
-  # separando banco de dados em 80/20
-  n_treino <- 0.8 * nrow(data)      # 4000
-  n_teste <- 0.2 * nrow(data)       # 1000
-  shuffle <- sample(rep(c(1,2), times = c(n_treino, n_teste)))
-  df_treino <- data[shuffle == 1,]  # 1 = treino
-  df_teste <- data[shuffle == 2,]   # 2 = teste
-  names_pred_all <- names(data[-1]) # nome de todas as preditoras
-  
-  for (p in 1:p_max) {
-    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
-    EQM_treino <- vector(mode='numeric', length(names_pred))
-    j <- 1
-    
-    for (i in names_pred) {  # iterando nos preditores não selecionados
-      formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
-                                            collapse = ' + ')))
-      EQM_treino[j] <- mean(lm(formula, df_treino)$residuals^2)
-      j <- j + 1
-    }
-    
-    pred_selecionado[p] <- names_pred[which.min(EQM_treino)]
-    best_fit <- lm(y ~ ., df_treino[c('y', pred_selecionado[1:p])])
-    EQM_teste[p] <- sum((df_teste$y - predict(best_fit, newdata = df_teste))^2)/n_teste
-  }
-  
-  result <- data.frame(p = 1:p_max, EQM = EQM_teste, pred = pred_selecionado)
-  return(list('preditores' = pred_selecionado, 'result' = result))
-}
-
-set.seed(282829)
-obj <- fsr(db, p_max = 30)
-
-knitr::kable(obj$result)
-plot(obj$result$p, obj$result$EQM, xlab = 'p', ylab = 'EQM', type = 'b')
-```
-
-```{r, eval = F}
-# alternativa teste
-set.seed(282829)
-
-fsr_alt <- function(data_treino, data_teste, p_max = 40) {
+fsr <- function(data_treino, data_teste, p_max = 40) {
   # objetos
   pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
   EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
@@ -145,7 +101,10 @@ fsr_alt <- function(data_treino, data_teste, p_max = 40) {
 
 shuffle <- sample(rep(c(1,2), times = c(4000, 1000)))
 
-obj_test <- fsr_alt(db[shuffle == 1,], db[shuffle == 2,], p_max = 10)
+obj <- fsr(db[shuffle == 1,], db[shuffle == 2,], p_max = 10)
+
+knitr::kable(obj$result)
+plot(obj$result$p, obj$result$EQM_teste, xlab = 'p', ylab = 'EQM', type = 'b')
 ```
 
 
@@ -206,119 +165,25 @@ Na validação cruzada o objetivo continua sendo operacionalizar a escolha do me
 # k - quantidade de folds
 
 fsr_cv <- function(data, p_max = 40, k = 5) {
-  # objetos
-  pred_selecionado <- character(p_max)  # vetor com o nome dos pred selecionados
-  names_pred_all <- names(data[-1])     # nome de todas as preditoras
-  result <- data.frame(
-    p = 1:p_max,
-    preditor = character(p_max),
-    EQM_treino = numeric(p_max),
-    EQM_teste = numeric(p_max)
-  )
+  resultado <- vector(mode = 'list', length = k)
+  shuffle <- sample(1:k, size = nrow(data), replace = T)
   
-  # separação do banco de dados
-  n <- nrow(data)
-  shuffle <- sample(1:k, size = n, replace = T)
-  
-  for (p in 1:p_max) {
-    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
-    j <- 1
-    result_parcial <- data.frame(
-      preditor = character(length(names_pred) * k),
-      fold = integer(length(names_pred) * k),
-      EQM_treino = numeric(length(names_pred) * k),
-      EQM_teste = numeric(length(names_pred) * k)
-    )
-
-    for (i in names_pred) {  # iterando nos preditores não selecionados
-      for (fold in 1:k) {  # iterando no k-ésimo fold
-        df_treino <- data[shuffle != fold,]
-        df_teste <- data[shuffle == fold,]
-        formula <- formula(paste('y ~', paste(c(pred_selecionado[1:p], i),
-                                              collapse = ' + ')))
-        fit <- lm(formula, data = df_treino)
-        
-        result_parcial[j,] <-  data.frame(
-          preditor = i, fold = fold, EQM_treino = mean(fit$residuals^2),
-          EQM_teste = mean((df_teste$y - predict(fit, newdata = df_teste))^2)
-        )
-        j <- j + 1
-      }
-    }
-    
-    estat_result <- result_parcial |>
-      group_by(preditor) |>
-      summarise_all(mean) |>
-      select(-fold)
-    pred_selecionado[p] <- estat_result$preditor[which.min(estat_result$EQM_treino)]
-    result[p,-1] <- estat_result[which.min(estat_result$EQM_treino),]
+  for (fold in 1:k) {
+    resultado[[fold]] <- fsr(data_treino = data[shuffle != fold,],
+                             data_teste = data[shuffle == fold,], p_max = p_max)
   }
   
-  return(result)
+  return(resultado)
 }
 
-a <- fsr_cv(db, p_max = 3)
+a <- fsr_cv(db, p_max = 20)
+
+# fazer gráico estilo elbow plot para determinar quantidade de preditoras.
+# Com isso, atualizar a questão 4.
 ```
-  
-```{r}
-# testes
-k <- 5
-shuffle <- sample(1:k, size = nrow(db), replace = T)
 
-aa <- vector(mode = 'list', length = k)
 
-for (i in 1:k) {
-  aa[[i]] <- fsr_alt(db[shuffle != i,], db[shuffle == i,], p_max = 10)
-}
-```
-  
-  
-```{r, eval=F, echo=F}
-# testes, reproduzindo o que foi feito no slide
-set.seed(2)
-n <- 5000
-X <- runif(n, min = 0, max = 100)
-f <- function(x){
-  150 + 10*cos(x/15)
-}
-y <- rnorm(n, mean = f(X), sd = 3)
-df <- data.frame(x = X, y = y)
 
-set.seed(1)
-K <- 10
-folds <- sample(1:K, size = n, replace = TRUE)
-
-resultados_kfold <- data.frame(
-  fold = integer(0),
-  grau = integer(0),
-  EQM_treino = numeric(0),
-  EQM_teste = numeric(0)
-)
-
-for(grau in 1:25) {
-  for(fold in 1:K) {
-    df_treino <- df[!folds == fold,]
-    df_teste <- df[folds == fold,]
-    ajuste <- lm(y ~ poly(x, grau), data = df_treino)
-    predicoes <- predict(ajuste, df_teste)
-    resultados_kfold <- rbind(resultados_kfold,
-                              data.frame(fold = fold, grau = grau,
-                                         EQM_treino = mean(ajuste$residuals^2),
-                                         EQM_teste = mean((df_teste$y - predicoes)^2)))
-  }
-}
-
-resultados_kfold |> head()
-
-resumo <- resultados_kfold |>
-group_by(grau) |>
-summarise_all(mean) |>
-select(-fold)
-
-resumo$grau[which.min(resumo$EQM_teste)]
-```
-  
-  
   (4) Com base nos métodos discutidos e nos resultados obtidos, qual subconjunto das 300 variáveis você diria que possuem um efeito não nulo na resposta $y$?
 
 A validação cruzada e o método holdout apontam que a quantidade ideal de variáveis importantes para predição é 21, dessa forma faz-se necessário buscar o modelo com 21 variáveis sub-ótimo utilizando todo o dataset, que pode ser obtido por forward stepwise regression.
