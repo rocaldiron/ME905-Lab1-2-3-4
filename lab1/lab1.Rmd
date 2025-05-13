@@ -43,14 +43,16 @@ O objetivo dessa parte é apresentar um modelo de regressão linear
 Utilizando a correção de Bonferroni, temos que $\alpha^*=\frac{\alpha}{300}$:
 
 ```{r}
-# leitura banco de dados
+# configuração global
+set.seed(282829)
+
+# leitura dos dados
 db <- read_csv("l1d1.csv")
-db_val <- read_csv("l1d1-val.csv")
 
 model <- lm(y ~., data = db)
 
 ajuste <- summary(model)
-ajuste$coefficients[ajuste$coefficients[, 4] < 0.05/300, 4]
+ajuste$coefficients[ajuste$coefficients[,4] < 0.05/300, 4]
 
 model_reajustado <- lm(y ~ ., data = db[c(1, which(ajuste$coefficients[,4] < 0.05/300))])
 summary(model_reajustado)
@@ -62,12 +64,12 @@ summary(model_reajustado)
 
 O método forward stepwise regression baseia-se em buscar o melhor subconjunto de variáveis (de acordo com alguma métrica, como EQM) de maneira recursiva (ou gulosa), sendo assim calculamos o melhor modelo com um parâmetro, depois o melhor modelo com dois parâmetros dado o melhor modelo com um parâmetro, e assim por diante. A separação do conjunto de dados entre treino e teste e a avaliação do erro de predição auxilia na escolha da melhor quantidade de variáveis dentre os melhores subconjuntos.
 
-```{r}
+```{r fsr}
 # data_treino - banco de dados para treino
 # data_teste - banco de dados para teste
 # p_max - quantidade de preditoras máxima no último modelo ajustado
 
-fsr <- function(data_treino, data_teste, p_max = 40) {
+fsr <- function(data_treino, data_teste, p_max = 30) {
   # objetos
   pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
   EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
@@ -101,14 +103,16 @@ fsr <- function(data_treino, data_teste, p_max = 40) {
 
 shuffle <- sample(rep(c(1,2), times = c(4000, 1000)))
 
-obj <- fsr(db[shuffle == 1,], db[shuffle == 2,], p_max = 10)
+obj <- fsr(db[shuffle == 1,], db[shuffle == 2,])
 
 knitr::kable(obj$result)
-plot(obj$result$p, obj$result$EQM_teste, xlab = 'p', ylab = 'EQM', type = 'b')
+plot(obj$result$p, obj$result$EQM_teste, xlab = 'p', ylab = 'EQM', type = 'b',
+     main = 'EQM Teste')
 ```
 
 
-Na tabela e no gráfico, temos o erro de predição para o melhor modelo com p parâmetros, é possível reparar que a partir de 21 variáveis o erro de predição começa a cair de maneira extremamente lenta, e até mesmo começa a subir conforme o número de variáveis aumenta, um bom indicativo de limite de complexidade do modelo.
+<!-- Na tabela e no gráfico, temos o erro de predição para o melhor modelo com p parâmetros, é possível reparar que a partir de 21 variáveis o erro de predição começa a cair de maneira extremamente lenta, e até mesmo começa a subir conforme o número de variáveis aumenta, um bom indicativo de limite de complexidade do modelo. -->
+
 
 ```{r, echo=F, eval=F}
 # Verificação manual da função fsr
@@ -159,12 +163,12 @@ names(db[-c(1, which(names(db) %in% c('x236', 'x212')))])[which.min(EQM_3)]  # x
 
 Na validação cruzada o objetivo continua sendo operacionalizar a escolha do melhor número de variáveis dentre os melhores subconjuntos, tendo em vista predição; com a diferença que ao invés de confiar em apenas uma medida de um split, obtemos a média de 5 diferentes medidas de erro de predição vindas de 5 partições nos dados, por exemplo.
 
-```{r}
+```{r fsr_cv}
 # data - banco de dados
 # p_max - quantidade de preditoras máxima no último modelo ajustado
 # k - quantidade de folds
 
-fsr_cv <- function(data, p_max = 40, k = 5) {
+fsr_cv <- function(data, p_max = 30, k = 5) {
   resultado <- vector(mode = 'list', length = k)
   shuffle <- sample(1:k, size = nrow(data), replace = T)
   
@@ -176,27 +180,29 @@ fsr_cv <- function(data, p_max = 40, k = 5) {
   return(resultado)
 }
 
-a <- fsr_cv(db, p_max = 20)
+a <- fsr_cv(db)
 
-# fazer gráico estilo elbow plot para determinar quantidade de preditoras.
-# Com isso, atualizar a questão 4.
+EQM <- data.frame(p = 1:30, EQM = rowMeans(sapply(a, \(x) x$result$EQM_treino)))
+
+plot(EQM$p, EQM$EQM, xlab = 'p', ylab = 'EQM', main = 'EQM Teste', type = 'b')
 ```
 
 
 
   (4) Com base nos métodos discutidos e nos resultados obtidos, qual subconjunto das 300 variáveis você diria que possuem um efeito não nulo na resposta $y$?
 
-A validação cruzada e o método holdout apontam que a quantidade ideal de variáveis importantes para predição é 21, dessa forma faz-se necessário buscar o modelo com 21 variáveis sub-ótimo utilizando todo o dataset, que pode ser obtido por forward stepwise regression.
+<!-- A validação cruzada e o método holdout apontam que a quantidade ideal de variáveis importantes para predição é 21, dessa forma faz-se necessário buscar o modelo com 21 variáveis sub-ótimo utilizando todo o dataset, que pode ser obtido por forward stepwise regression. -->
+Analisando a tabela e gráficos anterioriores, determinou-se que a quantidade ideal de preditoras é 13. Então, buscaremos o modelo com 13 variáveis utilizando foward stepwise regression em todo o dataset.
 
-```{r}
-fsr_final <- function(data, p_max = 40) {
+```{r fsr_total}
+fsr_total <- function(data, p_max) {
   # objetos
   pred_selecionado <- character(p_max)   # vetor com o nome dos pred selecionados
   EQM_teste <- numeric(p_max)            # salvar EQM minimo por iteração
-  names_pred_all <- names(data[-1]) # nome de todas as preditoras
+  names_pred_all <- names(data[-1])      # nome de todas as preditoras
   
   for (p in 1:p_max) {
-    names_pred <- setdiff(names_pred_all, pred_selecionado)  # preditores não selecionados
+    names_pred <- setdiff(names_pred_all, pred_selecionado) # preditores não selecionados
     EQM <- vector(mode='numeric', length(names_pred))
     j <- 1
     
@@ -214,7 +220,8 @@ fsr_final <- function(data, p_max = 40) {
   result <- data.frame(p = 1:p_max, pred = pred_selecionado)
   return(pred_selecionado)
 }
-obj2 <- fsr_final(db,21)
+
+obj2 <- fsr_total(db, 13)
 ```
 
 Com isso temos o conjunto de variáveis com efeito não nulo na resposta:
@@ -222,6 +229,13 @@ Com isso temos o conjunto de variáveis com efeito não nulo na resposta:
 ```{r}
 obj2
 ```
+
+Modelo final obtido:
+```{r}
+lm(formula(paste('y ~', paste(obj2, collapse=' + '))), db) |> summary()
+```
+
+
 
 # Parte 2 - LASSO
 
@@ -277,29 +291,30 @@ pred_teste_grid <- matrix(0, nrow = nrow(teste), ncol = length(lambda))
 eqm_treino_grid <- numeric(10)
 eqm_teste_grid <- numeric(10)
 
-for (i in 1:length(lambda)){
+for (i in 1:length(lambda)) {
   fit <-  glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]),
                  alpha = 1, lambda = lambda[i])
   pred_treino_grid[,i] <- predict(fit, newx = as.matrix(treino[,-1]), s = lambda[i])
   pred_teste_grid[,i] <- predict(fit, newx = as.matrix(teste[,-1]), s = lambda[i])
-
+  
   eqm_treino_grid[i] <- mean((as.matrix(treino[,1]) - pred_treino_grid[,i])^2)
   eqm_teste_grid[i] <- mean((as.matrix(teste[,1]) - pred_teste_grid[,i])^2)
 }
-  grid <- cbind(eqm_treino_grid, eqm_teste_grid, lambda)
-  min_eqm_lambda_treino <- lambda[which.min(eqm_treino_grid)]
-  min_eqm_lambda_teste <- lambda[which.min(eqm_teste_grid)]
+
+grid <- cbind(eqm_treino_grid, eqm_teste_grid, lambda)
+min_eqm_lambda_treino <- lambda[which.min(eqm_treino_grid)]
+min_eqm_lambda_teste <- lambda[which.min(eqm_teste_grid)]
 ```
 O lambda que produziu o menor erro de predição foi o $\lambda =$ `r min_eqm_lambda_teste` que minimiza o erro para o conjunto de teste (o mais importante para avaliar performance de predição), e coincidentemente também o de treino. o erro obtido foi de `r min(eqm_teste_grid)` no conjunto de teste.
 
   (4) Considere os dados no arquivo `l1d1-val.csv`. Este conjunto de dados não possui o valor da variável resposta. Gere um arquivo chamada `l1-pred-[grupo].csv` contendo as predições para as 1000 observações disponíveis no arquivo, com base no ajuste que você considera mais apropriado para fazer predições. Substitua `[grupo]` pela letra associada ao grupo no Moodle.
   
 ```{r}
-db_final <- read_csv("l1d1-val.csv")
+db_val <- read_csv("l1d1-val.csv")
 
 best_modelasso <- glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]),
                          alpha = 1, lambda = 0.01)
-pred_best_modelasso <- predict(best_modelasso, newx = as.matrix(db_final), s = 0.01)
+pred_best_modelasso <- predict(best_modelasso, newx = as.matrix(db_val), s = 0.01)
 
 write.csv(pred_best_modelasso, "l1-pred-J.csv")
 ```
