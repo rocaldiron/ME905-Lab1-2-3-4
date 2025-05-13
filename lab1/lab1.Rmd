@@ -42,7 +42,7 @@ O objetivo dessa parte é apresentar um modelo de regressão linear
 
 Utilizando a correção de Bonferroni, temos que $\alpha^*=\frac{\alpha}{300}$:
 
-```{r}
+```{r, message=F}
 # configuração global
 set.seed(282829)
 
@@ -52,7 +52,7 @@ db <- read_csv("l1d1.csv")
 model <- lm(y ~., data = db)
 
 ajuste <- summary(model)
-ajuste$coefficients[ajuste$coefficients[,4] < 0.05/300, 4]
+ajuste$coefficients[ajuste$coefficients[,4] < 0.05/300, 4]  # p-valores
 
 model_reajustado <- lm(y ~ ., data = db[c(1, which(ajuste$coefficients[,4] < 0.05/300))])
 summary(model_reajustado)
@@ -62,7 +62,7 @@ summary(model_reajustado)
   de variáveis que minimiza o erro de predição sob perda quadrática para
   um conjunto de dados de teste.
 
-O método forward stepwise regression baseia-se em buscar o melhor subconjunto de variáveis (de acordo com alguma métrica, como EQM) de maneira recursiva (ou gulosa), sendo assim calculamos o melhor modelo com um parâmetro, depois o melhor modelo com dois parâmetros dado o melhor modelo com um parâmetro, e assim por diante. A separação do conjunto de dados entre treino e teste e a avaliação do erro de predição auxilia na escolha da melhor quantidade de variáveis dentre os melhores subconjuntos.
+O método forward stepwise regression baseia-se em buscar o melhor subconjunto de variáveis (de acordo com alguma métrica, como EQM) de maneira recursiva (ou gulosa), sendo assim calculamos o melhor modelo com um parâmetro, depois o melhor modelo com dois parâmetros dado o melhor modelo com um parâmetro (ou seja, apenas adicionamos uma preditora no modelo anterior), e assim por diante. A separação do conjunto de dados entre treino e teste e a avaliação do erro de predição auxilia na escolha da melhor quantidade de variáveis dentre os melhores subconjuntos.
 
 ```{r fsr}
 # data_treino - banco de dados para treino
@@ -92,8 +92,7 @@ fsr <- function(data_treino, data_teste, p_max = 30) {
     EQM_treino_min[p] <- min(EQM_treino)
     pred_selecionado[p] <- names_pred[which.min(EQM_treino)]
     best_fit <- lm(y ~ ., data_treino[c('y', pred_selecionado[1:p])])
-    EQM_teste[p] <- sum((data_teste$y - predict(best_fit, newdata =
-                                                data_teste))^2)/nrow(data_teste)
+    EQM_teste[p] <- mean((data_teste$y - predict(best_fit, newdata = data_teste))^2)
   }
   
   result <- data.frame(p = 1:p_max, EQM_treino = EQM_treino_min,
@@ -111,11 +110,8 @@ plot(obj$result$p, obj$result$EQM_teste, xlab = 'p', ylab = 'EQM', type = 'b',
 ```
 
 
-<!-- Na tabela e no gráfico, temos o erro de predição para o melhor modelo com p parâmetros, é possível reparar que a partir de 21 variáveis o erro de predição começa a cair de maneira extremamente lenta, e até mesmo começa a subir conforme o número de variáveis aumenta, um bom indicativo de limite de complexidade do modelo. -->
-
-
 ```{r, echo=F, eval=F}
-# Verificação manual da função fsr
+# Verificação manual da função fsr - Para a correção, ignorar este chunk
 set.seed(282829)
 n_treino <- 0.8 * nrow(db)   # 4000
 n_teste <- 0.2 * nrow(db)    # 1000
@@ -161,7 +157,7 @@ names(db[-c(1, which(names(db) %in% c('x236', 'x212')))])[which.min(EQM_3)]  # x
 
   (3) Refaça o item 2 utilizando o método de validação cruzada k-fold, com k = 5.
 
-Na validação cruzada o objetivo continua sendo operacionalizar a escolha do melhor número de variáveis dentre os melhores subconjuntos, tendo em vista predição; com a diferença que ao invés de confiar em apenas uma medida de um split, obtemos a média de 5 diferentes medidas de erro de predição vindas de 5 partições nos dados, por exemplo.
+Na validação cruzada o objetivo continua sendo operacionalizar a escolha do melhor número de variáveis dentre os melhores subconjuntos, tendo em vista a predição; com a diferença que ao invés de confiar em apenas uma medida de um split, obtemos a média de 5 diferentes medidas de erro de predição vindas de 5 partições nos dados, por exemplo.
 
 ```{r fsr_cv}
 # data - banco de dados
@@ -241,6 +237,7 @@ lm(formula(paste('y ~', paste(obj2, collapse=' + '))), db) |> summary()
 
 Para essa parte, utilize a função `glmnet` do pacote `glmnet` para realizar ajustes utilizando o método LASSO.
 
+
   (1) Leia a documentação da função `glmnet` e a vignette disponível em https://glmnet.stanford.edu/articles/glmnet.html. Descreva os principais parâmetros da função que serão necessários para ajustar um modelo baseado em LASSO para um determinado conjunto de dados.
 
 x: matriz de input de dimensão $n \times p$. Necessário que $p \geq 2$.
@@ -249,9 +246,10 @@ y: variável resposta. o parâmetro `family` pode ser usado para especificar se 
 
 alpha: faz uma "mistura" entre Lasso (`alpha = 1`) e Ridge (`alpha = 0`).
 
-lamdda: parâmetro de penalização do LASSO. Quanto maior o seu valor, mais os coeficientes são encolhidos.
+lambda: parâmetro de penalização do LASSO. Quanto maior o seu valor, mais os coeficientes são encolhidos.
 
-  
+
+
   (2) Separe 10% do seu conjunto de dados como um conjunto de dados de teste. Com os 90% restante (conjunto de treino), ajuste uma regressão com LASSO considerando $\lambda = 2$. Calcule o Erro Quadrático Médio de predição para o conjunto de treino e o conjunto de teste. Quantas variáveis tiveram coeficientes não nulos para este ajuste?
 
 Na regressão LASSO incluímos um termo de penalização de norma 1 na função de loss: $\lambda\sum_{j = 1}^p|\beta_j|$. De maneira que os coeficientes dos parâmetros são encolhidos, e muitas vezes até zerados, auxiliando na predição e na seleção de variáveis. Para $\lambda = 2$ fixado temos:
@@ -266,7 +264,8 @@ treino <- db[shuffle == 1,]
 teste <- db[shuffle == 2,]
 
 # ajustando modelo
-modelasso <- glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]), alpha = 1, lambda = 2)
+modelasso <- glmnet(x = as.matrix(treino[,-1]), y = as.matrix(treino[,1]),
+                    alpha = 1, lambda = 2)
 
 # predições
 pred_treino <- predict(modelasso, newx = as.matrix(treino[,-1]), s = 2)
@@ -277,10 +276,12 @@ eqm_treino <- mean((as.matrix(treino[,1]) - pred_treino)^2)
 eqm_teste <- mean((as.matrix(teste[,1]) - pred_teste)^2)
 
 # quantidade de variáveis com coeficientes não nulos
-qnt_var_coef_nao__nulo <- sum(coef(modelasso) != 0)
+qnt_var_coef_nao_nulo <- sum(coef(modelasso) != 0)
 ```
 
-O erro quadrático médio de predição para o conjunto de dados de treino foi `r eqm_treino`, e para o conjunto de dados de teste foi `r eqm_treino`. a quantidade de variáveis com coeficiente não nulo foi `r qnt_var_coef_nao__nulo`.
+O erro quadrático médio de predição para o conjunto de dados de treino foi `r eqm_treino`, e para o conjunto de dados de teste foi `r eqm_treino`. a quantidade de variáveis com coeficiente não nulo foi `r qnt_var_coef_nao_nulo`.
+  
+  
   
   (3) Escolha (pelo menos) 10 valores de $\lambda$. Para cada valor de $\lambda$, refaça o item (2), com os mesmos conjuntos de treino/teste. Compare os erros de predição no teste para cada valor de $\lambda$. Qual valor de $\lambda$ produziu o menor erro de predição?
   
@@ -306,6 +307,8 @@ min_eqm_lambda_treino <- lambda[which.min(eqm_treino_grid)]
 min_eqm_lambda_teste <- lambda[which.min(eqm_teste_grid)]
 ```
 O lambda que produziu o menor erro de predição foi o $\lambda =$ `r min_eqm_lambda_teste` que minimiza o erro para o conjunto de teste (o mais importante para avaliar performance de predição), e coincidentemente também o de treino. o erro obtido foi de `r min(eqm_teste_grid)` no conjunto de teste.
+
+
 
   (4) Considere os dados no arquivo `l1d1-val.csv`. Este conjunto de dados não possui o valor da variável resposta. Gere um arquivo chamada `l1-pred-[grupo].csv` contendo as predições para as 1000 observações disponíveis no arquivo, com base no ajuste que você considera mais apropriado para fazer predições. Substitua `[grupo]` pela letra associada ao grupo no Moodle.
   
