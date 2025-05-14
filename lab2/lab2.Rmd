@@ -102,28 +102,28 @@ bs <- function(data) {
 
 # gera floresta aleatória ------------------------------------------------------
 # data banco de dados com a primeira coluna sendo a resposta.
-# tree quantidade de árvores de decisão da floresta.
-random_forest <- function(data, tree, ...) {
-  # controle <- rpart.control(...)
+# n_tree quantidade de árvores de decisão da floresta.
+random_forest <- function(data, n_tree, ...) {
+  controle <- rpart.control(...)
   
   # criando objetos
-  floresta <- vector(mode = 'list', length = tree)
-  OOBE <- numeric(tree)
+  floresta <- vector(mode = 'list', length = n_tree)
+  OOBE <- numeric(n_tree)
   
-  for (i in 1:tree) {
+  for (i in 1:n_tree) {
     linhas_sorteadas <- bs(data)
     db_bs <- (data |>
       select_cols())[linhas_sorteadas,]
     
-    floresta[[i]] <- rpart(y ~ ., db_bs)
+    floresta[[i]] <- rpart(y ~ ., db_bs, control = controle)
     OOBE[i] <- mean(predict(floresta[[i]], type = 'class',
                        newdata = data[-unique(linhas_sorteadas),]) ==
-      data[-unique(linhas_sorteadas),1])  # possível erro
+      data[-unique(linhas_sorteadas),]$y)
   }
   return(floresta)
 }
 
-a <- random_forest(mnist, tree=2)
+a <- random_forest(mnist, n_tree=2)
 
 ```
 
