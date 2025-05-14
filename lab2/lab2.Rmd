@@ -32,7 +32,7 @@ mnist$y <- as.factor(mnist$y)
 ## a)
 ```{r}
 # visualizando dados
-converte_df <- function(vetor_covariaveis){
+converte_df <- function(vetor_covariaveis) {
   vetor_covariaveis <- as.vector(unlist(vetor_covariaveis))
   if(length(vetor_covariaveis) != 784){
     stop("Passe um vetor com 784 valores!")
@@ -43,12 +43,13 @@ converte_df <- function(vetor_covariaveis){
   data.frame(pos_x, pos_y, valor = vetor_covariaveis)
 }
 
-visnum <- function(df){
+visnum <- function(df) {
   df %>% ggplot(aes(x = pos_y, y = pos_x, fill = valor)) +
     geom_tile() +
     scale_fill_gradient(low = "white", high = "black") +
     theme_void() +
-    scale_y_reverse()
+    scale_y_reverse() +
+    theme(legend.position = "none")
 }
 
 # lendo números
@@ -121,14 +122,14 @@ random_forest <- function(data, n_tree, ...) {
       select_cols())[linhas_sorteadas,]
     
     floresta[[i]] <- rpart(y ~ ., db_bs, control = controle)
-    OOBE[i] <- mean(predict(floresta[[i]], type = 'class',
-                       newdata = data[-unique(linhas_sorteadas),]) ==
-      data[-unique(linhas_sorteadas),]$y)
+    OOBE[i] <- 1 - mean(predict(floresta[[i]], type = 'class',
+                                newdata = data[-unique(linhas_sorteadas),]) ==
+                          data[-unique(linhas_sorteadas),]$y)
   }
-  return(floresta)
+  return(list('forest' = floresta, 'acuracia' = 1 - OOBE))
 }
 
-a <- random_forest(mnist, n_tree=3)
+forest <- random_forest(mnist, n_tree=20)
 ```
 
 
@@ -136,22 +137,73 @@ a <- random_forest(mnist, n_tree=3)
 # 5. Análise dos Erros
 
 ```{r}
-pred_tree <- vector(mode='list', length(a))
+# função voto_da_maioria -------------------------------------------------------
+# forest precisa ser um objeto da saída da função `random_forest`.
+# data banco de dados para predição.
 
-for (i in 1:length(a)) {
-  pred_tree[[i]] <- unname(predict(a[[i]], type = 'class', newdata = mnist))
+voto_da_maioria <- function(forest, data) {
+  pred_tree <- vector(mode='list', length(forest$forest))
+  
+  for (i in 1:length(forest$forest)) {
+    pred_tree[[i]] <- unname(predict(forest$forest[[i]], type = 'class',
+                                     newdata = data))
+  }
+  voto <- data.frame(tree = unname(do.call(cbind.data.frame, pred_tree)))
+  apply(voto, 1, \(x) names(which.max(table(unlist(x)))))
 }
 
-db_pred <- data.frame(y = mnist$y, tree = unname(do.call(cbind.data.frame,
-                                                         pred_tree)))
+# fazendo predição e modificando `converte_df` ---------------------------------
+pred_forest <- voto_da_maioria(forest, mnist)
+head(pred_forest)  # predição para 6 primeiras obs
+
+
+mnist_com_pred <- cbind('pred' = pred_forest, mnist)
+
+
+combinacoes_erro <- data.frame()
+
+for (y in c(0,1,7,8)) {
+  for (pred in c(0,1,7,8)) {
+    combinacoes_erro <- bind_rows(combinacoes_erro, data.frame(pred = pred,
+        mnist[mnist_com_pred$y == y & mnist_com_pred$pred == pred,][1,])
+    )
+  }
+}
+
+
+# modificando converte_df 
+converte_df_mod <- function(data) {
+  pos_x <- rep(1:28, each = 28)
+  pos_y <- rep(1:28, times = 28)
+  resultado <- data.frame()
+  
+  for (i in 1:16) {
+    pred <- data$pred[i]
+    y <- data$y[i]
+    vetor_covariaveis <- as.vector(unlist(data[i,-c(1,2)]))
+    resultado <- bind_rows(resultado, bind_cols(pred = pred, y = y,
+                    data.frame(pos_x, pos_y, valor = vetor_covariaveis)))
+  }
+  
+  return(resultado)
+}
+
+erro_long <- converte_df_mod(combinacoes_erro)
+
+# plotando
+visnum(erro_long) +
+  facet_grid(rows = vars(pred), cols = vars(y)) +
+  theme_bw() +
+  labs(x = 'Verdadeiro', y = 'Predito',
+       title = 'Situações possíveis') +
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        legend.position = "none")
 ```
 
 
 
-
-
-
-
+# 6. Predição em Novos Dados
 
 
 
