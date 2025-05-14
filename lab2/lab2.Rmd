@@ -15,6 +15,8 @@ library(ggplot2)
 library(dplyr)
 ```
 
+
+
 # 1. Leitura dos Dados
 ```{r}
 # lendo dados
@@ -22,6 +24,7 @@ library(readr)
 mnist <- read_csv("MNIST0178.csv")
 mnist$y <- as.factor(mnist$y)
 ```
+
 
 
 # 2. Visualização de Dígitos
@@ -66,6 +69,7 @@ Vemos os números 0, 1, 7 e 8, respectivamente.
 Possívelmente, os números mais difíceis de serem distinguidos são os dígitos 1 e 7 pela sua semelhança e,analogamente, teremos menos dificuldade entre o 0 e o 8 com relação aos demais.
 
 
+
 # 3. Árvore de Classificação com rpart
 
 ```{r}
@@ -77,6 +81,7 @@ sum(pred == mnist$y)/length(mnist$y)
 ```
 
 Houve uma acurácia de aproximadamente 90%, então a árvore foi eficaz. No entanto, nossa conjectura não se provou verdadeira, veja que o 1 e o 7 foram mais confundidos com o 8 e o 8 foi mais confundido com o 1. Contudo, como nossas suspeitas, o 0 foi mais confundido com o 8.
+
 
 
 # 4. Florestas Aleatórias (com Estratégias Manuais)
@@ -123,9 +128,27 @@ random_forest <- function(data, n_tree, ...) {
   return(floresta)
 }
 
-a <- random_forest(mnist, n_tree=2)
-
+a <- random_forest(mnist, n_tree=3)
 ```
+
+
+
+# 5. Análise dos Erros
+
+```{r}
+pred_tree <- vector(mode='list', length(a))
+
+for (i in 1:length(a)) {
+  pred_tree[[i]] <- unname(predict(a[[i]], type = 'class', newdata = mnist))
+}
+
+db_pred <- data.frame(y = mnist$y, tree = unname(do.call(cbind.data.frame,
+                                                         pred_tree)))
+```
+
+
+
+
 
 
 
