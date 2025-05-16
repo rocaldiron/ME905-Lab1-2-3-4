@@ -9,10 +9,22 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+set.seed(282829)
+
 # packages
 library(rpart)
 library(ggplot2)
 library(dplyr)
+library(patchwork)
+
+# definindo tema global ggplot
+theme_set(
+  theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.5)
+    )
+)
+
 ```
 
 
@@ -46,10 +58,10 @@ converte_df <- function(vetor_covariaveis) {
 visnum <- function(df) {
   df %>% ggplot(aes(x = pos_y, y = pos_x, fill = valor)) +
     geom_tile() +
-    scale_fill_gradient(low = "white", high = "black") +
+    scale_fill_gradient(low = 'white', high = 'black') +
     theme_void() +
     scale_y_reverse() +
-    theme(legend.position = "none")
+    theme(legend.position = 'none')
 }
 
 # lendo números
@@ -58,10 +70,7 @@ n2 <- converte_df(mnist[3,-1])
 n3 <- converte_df(mnist[6,-1])
 n4 <- converte_df(mnist[7,-1])
 
-visnum(n1)  # 0
-visnum(n2)  # 1
-visnum(n3)  # 7
-visnum(n4)  # 8
+(visnum(n1) + visnum(n2)) / (visnum(n3) + visnum(n4))
 ```
 
 Vemos os números 0, 1, 7 e 8, respectivamente.
@@ -86,160 +95,113 @@ Houve uma acurácia de aproximadamente 90%, então a árvore foi eficaz. No enta
 
 
 # 4. Florestas Aleatórias (com Estratégias Manuais)
-
 ```{r}
-# seleciona colunas do banco de dados ------------------------------------------
-# data banco de dados com a primeira coluna sendo a resposta.
-# p número de variáveis selecionadas. Se não especificada, será usado a raíz
-# quadrada da quantidade de preditoras no banco de dados.
-
-select_cols <- function(data, p = NULL) {
-  if (is.null(p)) p <- round(sqrt(ncol(data)))
-  p_tot <- ncol(data)                     # total de variáveis
-  select_var <- c(1, sample(2:p_tot, p))  # variáveis selecionadas
-  return(data[select_var])
-}
-
 # bootstrap --------------------------------------------------------------------
 # data banco de dados com a primeira coluna sendo a resposta.
+
 bs <- function(data) {
   return(sample(1:nrow(data), nrow(data), replace = T))
 }
 
-# gera floresta aleatória ------------------------------------------------------
-# data banco de dados com a primeira coluna sendo a resposta.
-# n_tree quantidade de árvores de decisão da floresta.
-random_forest <- function(data, n_tree, ...) {
-  controle <- rpart.control(...)
-  
-  # criando objetos
-  floresta <- vector(mode = 'list', length = n_tree)
-  OOBE <- numeric(n_tree)
-  
-  for (i in 1:n_tree) {
-    linhas_sorteadas <- bs(data)
-    db_bs <- (data |> select_cols())[linhas_sorteadas,]
-    
-    floresta[[i]] <- rpart(y ~ ., db_bs, control = controle)
-    OOBE[i] <- 1 - mean(predict(floresta[[i]], type = 'class',
-                                newdata = data[-unique(linhas_sorteadas),]) ==
-                          data[-unique(linhas_sorteadas),]$y)
-  }
-  return(list('forest' = floresta, 'acuracia' = 1 - OOBE))
-}
 
-forest <- random_forest(mnist, n_tree=20)
-```
+# random_forest ----------------------------------------------------------------
+# função que gera floresta aleatória.
+# data banco de dados.
+# n_tree número de árvores.
+# ... parâmetros para o ajuste da função `rpart.
 
-```{r}
-# teste keik
-random_forest <- function(data, n_tree, ...) {
+random_forest <- function(data, n_tree, p = NULL, ...) {
   controle <- rpart.control(...)  # controle de parâmetros do rpart
   
   # definindo objetos
   n <- nrow(data)  # número de observações
-  floresta <- vector(mode = 'list', length = n_tree)  # armazenar as árvores
-  p <- round(sqrt(ncol(data)))    # sugestão apresentada em aula e livro
-  oob_preds <- vector('list', n)  # predições OOB por observação
-  oob_error_curve <- numeric(n_tree)  # curva do erro OOB ao longo das árvores
+  p_tot <- ncol(data)
   classes <- c('0', '1', '7', '8')
-  
-  # matriz de NA para armazenar erros OOB por classe NA para se proteger de
-  # alguma árvore não possuir nenhum dado de uma classe específica,
-  # impossibilitando calcular seu erro (muito dificil de ocorrer na prática,
-  # não?!)
-  oob_class_errors <- matrix(NA, nrow = n_tree, ncol = length(classes))
-  colnames(oob_class_errors) <- classes
+  floresta <- vector(mode = 'list', length = n_tree)  # armazenar as árvores
+  if (is.null(p)) p <- round(sqrt(ncol(data)))  # sugestão apresentada em aula
+  oob_pred <- data.frame(matrix(NA, nrow=n, ncol=n_tree,  # guarda predição por árvore
+                            dimnames = list(NULL, paste0(rep('tree'), 1:n_tree))))
   
   for (t in 1:n_tree) {
     linhas_sorteadas <- bs(data)
     oob_indices <- setdiff(1:n, unique(linhas_sorteadas)) # linhas não sorteadas
     
-    p_tot <- ncol(data)
-    selected_cols <- c(1, sample(2:p_tot, p))  # y e preditoras selecionadas
-    db_bs <- data[linhas_sorteadas, selected_cols]
+    colunas_selecionadas <- c(1, sample(2:p_tot, p))  # y e preditoras selecionadas
+    db_bs <- data[linhas_sorteadas, colunas_selecionadas]
     
     floresta[[t]] <- rpart(y ~ ., db_bs, control = controle)  # ajustando arvore
     
-    oob_data <- data[oob_indices, selected_cols]  # obs não usadas na arvore
+    oob_data <- data[oob_indices, colunas_selecionadas]  # df de obs. não usadas
     pred <- predict(floresta[[t]], newdata = oob_data, type = 'class')
-    # for (j in seq_along(oob_indices)) {
-    #   idx <- oob_indices[j]
-    #   oob_preds[[idx]] <- c(
-    #     #oob_preds[[idx]],
-    #     as.character(pred[j]))
-    # }
-    # verificar ideia de oob preds, mas acho que pode ser substituido por
-    oob_preds[oob_indices] <- as.character(pred)
-    
-    # continuar verificação daqui
-    # atualiza predições OOB
-    oob_final_pred <- character(n)
-    for (i in 1:n) {
-      if (length(oob_preds[[i]]) > 0) {
-        oob_final_pred[i] <- names(sort(table(oob_preds[[i]]), decreasing = TRUE))[1]
-      } else {
-        oob_final_pred[i] <- NA
-      }
-    }
-    
-    real <- as.character(data$y)
-    valido <- !is.na(oob_final_pred)
-    oob_error_curve[t] <- mean(oob_final_pred[valido] != real[valido])
-    
-    # erro por classe
-    for (j in seq_along(classes)) {
-      classe <- classes[j]
-      indices_classe <- which(real == classe & valido)
-      if (length(indices_classe) > 0) {
-        oob_class_errors[t, j] <- mean(oob_final_pred[indices_classe] != real[indices_classe])
-      } else {
-        oob_class_errors[t, j] <- NA
-      }
-    }
+    oob_pred[oob_indices,t] <- as.character(pred)
   }
+  
+  pred <- apply(oob_pred, 1, \(x) {  # voto da maioria
+    table <- table(x)
+    if (length(table) == 0) NA else names(which.max(table))
+  })
+  
+  oob <- mean(pred != data$y, na.rm = T)  # erro oob do modelo
+  oob_class_error <- data.frame(          # erro out of bag por classe
+    classe_0 = mean(data$y[which(data$y == 0)] == pred[which(data$y == 0)], na.rm=T),
+    classe_1 = mean(data$y[which(data$y == 1)] == pred[which(data$y == 1)], na.rm=T),
+    classe_7 = mean(data$y[which(data$y == 7)] == pred[which(data$y == 7)], na.rm=T),
+    classe_8 = mean(data$y[which(data$y == 8)] == pred[which(data$y == 8)], na.rm=T)
+  )
   
   return(list(
     forest = floresta,
-    oob_error_curve = oob_error_curve,
-    oob_class_errors = oob_class_errors,
-    oob_accuracy = 1 - oob_error_curve[n_tree]
+    oob_class_error = oob_class_error,
+    oob_accuracy = 1 - oob
   ))
 }
+```
 
-
-modelo <- random_forest(mnist, n_tree = 10, minbucket = 10, maxdepth = 30, cp = 0.0001)
-
-oob.error.data <- data.frame(
-  Trees = rep(1:10, times = 5),
-  Type = factor(rep(c("OOB", colnames(modelo$oob_class_errors)), each = 10),
-                levels = c("OOB", colnames(modelo$oob_class_errors))),
-  Error = c(modelo$oob_error_curve,
-            as.vector(modelo$oob_class_errors))
+Com a função definida vamos ajustar 6 modelos variando `n_tree`, `p` e `maxdepth`.
+```{r pequena_simulacao}
+# ajsutando modelos
+modelos <- list(
+  modelo1 = random_forest(mnist, n_tree = 5 , p = 10, maxdepth = 5 ),
+  modelo2 = random_forest(mnist, n_tree = 5 , p = 10, maxdepth = 20),
+  modelo3 = random_forest(mnist, n_tree = 10, p = 28, maxdepth = 5 ),
+  modelo4 = random_forest(mnist, n_tree = 10, p = 28, maxdepth = 20),
+  modelo5 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 5 ),
+  modelo6 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 20),
+  modelo7 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 5 ),
+  modelo8 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 20)
 )
 
-ggplot(data = oob.error.data, aes(x = Trees, y = Error)) +
-  geom_line(aes(color = Type), linewidth = 1.2) +
-  labs(title = "Erro OOB e de classificação por número de árvores",
-       x = "Número de árvores",
-       y = "Erro",
-       color = "Tipo") +
-  theme_minimal(base_size = 14)
+# resultados
+sapply(modelos, \(x) 
+  round(unlist(c(oob_accuracy = x$oob_accuracy, x$oob_class_error)), 4),
+  simplify='matrix') |>
+  knitr::kable()
 ```
+
+A tabela apresentada contém as informações da acurácia geral do modelo (primeira linha) e para cada dígito. Além disso, note que os melhores modelos foram o modelo 7 e 8, justamente os que apresentam o maior número de árvores e preditoras por árvore. Além disso, note como o modelo 1 e 2 foram excepcionalmente ruins e são justamente os que apresentam o menor número de árvores e preditoras. Então, os parâmetros que mais parecem importar são: número de árvores (`n_tree`) e quantidade de preditoras no treino (`p`).
+
+Uma boa medida para a acurácia do modelo é a acurácia out-of-bag (primeira linha da tabela), ou seja, verifica-se o desempenho do modelo analisando a classificação das árvores para observações não utilziadas em seu treino.
+
+Além disso, também testamos ooutros parâmetros, como `minbucket`, mas paraceu não surtir efeito no modelo para valores abaixo de 50, talvez pelo número de observações ser elevado; e `cp`, o qual, para valores grandes, como 1 e 0.5, apresentou um desempenho pior do que quando comparado com valores pequenos, como 0.01, 0.001 e 0.0001.
+
+Por fim, vale ressaltar que entre o modelo 1 e 2 é possível perceber uma piora e a única diferença entre esses modelos com relação aos parâmetros é o `maxdepth`. Como mencionado em aula, aumentar exageradamente uma árvore pode piorar sua predição e, consequentemente, acurária, justamente o que ocorre
 
 
 
 # 5. Análise dos Erros
 
-```{r}
-# função voto_da_maioria -------------------------------------------------------
+```{r, eval}
+# ajustando modelo escolhido ---------------------------------------------------
+fit_escolhido <- random_forest(mnist, n_tree = 50, p = 50, maxdepth = 20)
+
+# predict.forest ---------------------------------------------------------------
 # forest precisa ser um objeto da saída da função `random_forest`.
 # data banco de dados para predição.
 
-voto_da_maioria <- function(forest, data) {
+predict.forest <- function(forest, data) {
   pred_tree <- vector(mode='list', length(forest$forest))
   
-  for (i in 1:length(forest$forest)) {
+  for (i in seq_along(forest$forest)) {
     pred_tree[[i]] <- unname(predict(forest$forest[[i]], type = 'class',
                                      newdata = data))
   }
@@ -248,23 +210,18 @@ voto_da_maioria <- function(forest, data) {
 }
 
 # fazendo predição e modificando `converte_df` ---------------------------------
-pred_forest <- voto_da_maioria(forest, mnist)
-head(pred_forest)  # predição para 6 primeiras obs
+pred_forest <- predict.forest(modelo1, mnist)
+mnist_com_pred <- cbind('pred' = pred_forest, mnist)  # juntando dados com predição
 
-
-mnist_com_pred <- cbind('pred' = pred_forest, mnist)
-
-
-combinacoes_erro <- data.frame()
+# combinando casos
+combinacoes <- data.frame()
 
 for (y in c(0,1,7,8)) {
   for (pred in c(0,1,7,8)) {
-    combinacoes_erro <- bind_rows(combinacoes_erro, data.frame(pred = pred,
-        mnist[mnist_com_pred$y == y & mnist_com_pred$pred == pred,][1,])
-    )
+    combinacoes <- bind_rows(combinacoes, data.frame(pred = pred,
+            mnist[mnist_com_pred$y == y & mnist_com_pred$pred == pred,][1,]))
   }
 }
-
 
 # modificando converte_df 
 converte_df_mod <- function(data) {
@@ -283,22 +240,28 @@ converte_df_mod <- function(data) {
   return(resultado)
 }
 
-erro_long <- converte_df_mod(combinacoes_erro)
+erro_long <- converte_df_mod(combinacoes)
 
-# plotando
+# plot
 visnum(erro_long) +
-  facet_grid(rows = vars(pred), cols = vars(y)) +
-  theme_bw() +
+  facet_grid(rows = vars(pred), cols = vars(y), switch = 'y') +
+  theme_bw(base_size = 15) +
   labs(x = 'Verdadeiro', y = 'Predito',
        title = 'Situações possíveis') +
-  theme(axis.ticks = element_blank(),
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.ticks = element_blank(),
         axis.text = element_blank(),
-        legend.position = "none")
+        panel.grid = element_blank(),
+        legend.position = 'none')
 ```
 
 
 
 # 6. Predição em Novos Dados
+
+```{r}
+mnist_teste <- read.csv('MNIST0178-teste.csv')
+```
 
 
 
