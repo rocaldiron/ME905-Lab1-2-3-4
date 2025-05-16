@@ -95,7 +95,7 @@ Houve uma acurácia de aproximadamente 90%, então a árvore foi eficaz. No enta
 
 select_cols <- function(data, p = NULL) {
   if (is.null(p)) p <- round(sqrt(ncol(data)))
-  p_tot <- ncol(data)  # total de variáveis
+  p_tot <- ncol(data)                     # total de variáveis
   select_var <- c(1, sample(2:p_tot, p))  # variáveis selecionadas
   return(data[select_var])
 }
@@ -118,8 +118,7 @@ random_forest <- function(data, n_tree, ...) {
   
   for (i in 1:n_tree) {
     linhas_sorteadas <- bs(data)
-    db_bs <- (data |>
-      select_cols())[linhas_sorteadas,]
+    db_bs <- (data |> select_cols())[linhas_sorteadas,]
     
     floresta[[i]] <- rpart(y ~ ., db_bs, control = controle)
     OOBE[i] <- 1 - mean(predict(floresta[[i]], type = 'class',
@@ -130,6 +129,102 @@ random_forest <- function(data, n_tree, ...) {
 }
 
 forest <- random_forest(mnist, n_tree=20)
+```
+
+```{r}
+# teste keik
+random_forest <- function(data, n_tree, ...) {
+  controle <- rpart.control(...)  # controle de parâmetros do rpart
+  
+  # definindo objetos
+  n <- nrow(data)  # número de observações
+  floresta <- vector(mode = 'list', length = n_tree)  # armazenar as árvores
+  p <- round(sqrt(ncol(data)))    # sugestão apresentada em aula e livro
+  oob_preds <- vector('list', n)  # predições OOB por observação
+  oob_error_curve <- numeric(n_tree)  # curva do erro OOB ao longo das árvores
+  classes <- c('0', '1', '7', '8')
+  
+  # matriz de NA para armazenar erros OOB por classe NA para se proteger de
+  # alguma árvore não possuir nenhum dado de uma classe específica,
+  # impossibilitando calcular seu erro (muito dificil de ocorrer na prática,
+  # não?!)
+  oob_class_errors <- matrix(NA, nrow = n_tree, ncol = length(classes))
+  colnames(oob_class_errors) <- classes
+  
+  for (t in 1:n_tree) {
+    linhas_sorteadas <- bs(data)
+    oob_indices <- setdiff(1:n, unique(linhas_sorteadas)) # linhas não sorteadas
+    
+    p_tot <- ncol(data)
+    selected_cols <- c(1, sample(2:p_tot, p))  # y e preditoras selecionadas
+    db_bs <- data[linhas_sorteadas, selected_cols]
+    
+    floresta[[t]] <- rpart(y ~ ., db_bs, control = controle)  # ajustando arvore
+    
+    oob_data <- data[oob_indices, selected_cols]  # obs não usadas na arvore
+    pred <- predict(floresta[[t]], newdata = oob_data, type = 'class')
+    # for (j in seq_along(oob_indices)) {
+    #   idx <- oob_indices[j]
+    #   oob_preds[[idx]] <- c(
+    #     #oob_preds[[idx]],
+    #     as.character(pred[j]))
+    # }
+    # verificar ideia de oob preds, mas acho que pode ser substituido por
+    oob_preds[oob_indices] <- as.character(pred)
+    
+    # continuar verificação daqui
+    # atualiza predições OOB
+    oob_final_pred <- character(n)
+    for (i in 1:n) {
+      if (length(oob_preds[[i]]) > 0) {
+        oob_final_pred[i] <- names(sort(table(oob_preds[[i]]), decreasing = TRUE))[1]
+      } else {
+        oob_final_pred[i] <- NA
+      }
+    }
+    
+    real <- as.character(data$y)
+    valido <- !is.na(oob_final_pred)
+    oob_error_curve[t] <- mean(oob_final_pred[valido] != real[valido])
+    
+    # erro por classe
+    for (j in seq_along(classes)) {
+      classe <- classes[j]
+      indices_classe <- which(real == classe & valido)
+      if (length(indices_classe) > 0) {
+        oob_class_errors[t, j] <- mean(oob_final_pred[indices_classe] != real[indices_classe])
+      } else {
+        oob_class_errors[t, j] <- NA
+      }
+    }
+  }
+  
+  return(list(
+    forest = floresta,
+    oob_error_curve = oob_error_curve,
+    oob_class_errors = oob_class_errors,
+    oob_accuracy = 1 - oob_error_curve[n_tree]
+  ))
+}
+
+
+modelo <- random_forest(mnist, n_tree = 10, minbucket = 10, maxdepth = 30, cp = 0.0001)
+
+oob.error.data <- data.frame(
+  Trees = rep(1:10, times = 5),
+  Type = factor(rep(c("OOB", colnames(modelo$oob_class_errors)), each = 10),
+                levels = c("OOB", colnames(modelo$oob_class_errors))),
+  Error = c(modelo$oob_error_curve,
+            as.vector(modelo$oob_class_errors))
+)
+
+ggplot(data = oob.error.data, aes(x = Trees, y = Error)) +
+  geom_line(aes(color = Type), linewidth = 1.2) +
+  labs(title = "Erro OOB e de classificação por número de árvores",
+       x = "Número de árvores",
+       y = "Erro",
+       color = "Tipo") +
+  theme_minimal(base_size = 14)
 ```
 
 
