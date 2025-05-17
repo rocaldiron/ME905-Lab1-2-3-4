@@ -7,7 +7,10 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.align = 'center'
+)
 
 set.seed(282829)
 
@@ -161,14 +164,15 @@ Com a função definida vamos ajustar 6 modelos variando `n_tree`, `p` e `maxdep
 ```{r pequena_simulacao}
 # ajsutando modelos
 modelos <- list(
-  modelo1 = random_forest(mnist, n_tree = 5 , p = 10, maxdepth = 5 ),
+  modelo1 = random_forest(mnist, n_tree = 5 , p = 10, maxdepth = 5),
   modelo2 = random_forest(mnist, n_tree = 5 , p = 10, maxdepth = 20),
-  modelo3 = random_forest(mnist, n_tree = 10, p = 28, maxdepth = 5 ),
+  modelo3 = random_forest(mnist, n_tree = 10, p = 28, maxdepth = 5),
   modelo4 = random_forest(mnist, n_tree = 10, p = 28, maxdepth = 20),
-  modelo5 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 5 ),
+  modelo5 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 5),
   modelo6 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 20),
-  modelo7 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 5 ),
-  modelo8 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 20)
+  modelo7 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 5),
+  modelo8 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 20),
+  modelo9 = random_forest(mnist, n_tree = 100, p = 50, maxdepth = 20)
 )
 
 # resultados
