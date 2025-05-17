@@ -9,10 +9,12 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
+  fig.width = 6,
+  fig.height = 4,
   fig.align = 'center'
 )
 
-set.seed(282829)
+set.seed(282828)
 
 # packages
 library(rpart)
@@ -27,16 +29,15 @@ theme_set(
       plot.title = element_text(hjust = 0.5)
     )
 )
-
 ```
 
 
 
 # 1. Leitura dos Dados
-```{r}
+```{r, message=F}
 # lendo dados
 library(readr)
-mnist <- read_csv("MNIST0178.csv")
+mnist <- read_csv('MNIST0178.csv')
 mnist$y <- as.factor(mnist$y)
 ```
 
@@ -45,8 +46,8 @@ mnist$y <- as.factor(mnist$y)
 # 2. Visualização de Dígitos
 
 ## a)
-```{r}
-# visualizando dados
+```{r, fig.width=5.5, fig.height=3}
+# funções de visualização de dados
 converte_df <- function(vetor_covariaveis) {
   vetor_covariaveis <- as.vector(unlist(vetor_covariaveis))
   if(length(vetor_covariaveis) != 784){
@@ -68,38 +69,40 @@ visnum <- function(df) {
 }
 
 # lendo números
-n1 <- converte_df(mnist[1,-1])
-n2 <- converte_df(mnist[3,-1])
-n3 <- converte_df(mnist[6,-1])
-n4 <- converte_df(mnist[7,-1])
+n1 <- converte_df(mnist[1,-1])  # 0
+n2 <- converte_df(mnist[3,-1])  # 1
+n3 <- converte_df(mnist[6,-1])  # 7
+n4 <- converte_df(mnist[7,-1])  # 8
 
+# visualizando números
 (visnum(n1) + visnum(n2)) / (visnum(n3) + visnum(n4))
 ```
 
-Vemos os números 0, 1, 7 e 8, respectivamente.
+Vemos os números 0 e 1 na parte superior e 7 e 8 na parte inferior.
 
 ## b)
-Possívelmente, os números mais difíceis de serem distinguidos são os dígitos 1 e 7 pela sua semelhança e,analogamente, teremos menos dificuldade entre o 0 e o 8 com relação aos demais.
+Possívelmente, os números mais difíceis de serem distinguidos são os dígitos 1 e 7 pela sua semelhança e, analogamente, teremos menos dificuldade entre o 0 e o 8 com relação aos demais.
 
 
 
-# 3. Árvore de Classificação com rpart
+# 3. Árvore de Classificação com `rpart`
 
-```{r}
-fit <- rpart(y ~ ., data = mnist)
-pred <- predict(fit, type = 'class')
+```{r ajustando_arvore}
+fit <- rpart(y ~ ., data = mnist)     # ajustando modelo
+pred <- predict(fit, type = 'class')  # categorias preditas
 
-table('Predição' = pred, 'Valores Verdadeiros' = mnist$y)
-sum(pred == mnist$y)/length(mnist$y)
+acuracia <- sum(pred == mnist$y)/length(mnist$y)
+table('Predição' = pred, 'Valores Verdadeiros' = mnist$y)  # matriz de confusão
 ```
 
-Houve uma acurácia de aproximadamente 90%, então a árvore foi eficaz. No entanto, nossa conjectura não se provou verdadeira, veja que o 1 e o 7 foram mais confundidos com o 8 e o 8 foi mais confundido com o 1. Contudo, como nossas suspeitas, o 0 foi mais confundido com o 8.
+Houve uma acurácia de, aproximadamente, `r 100 * round(acuracia, 3)`%, então a árvore foi eficaz. Além disso, como nossas suspeitas, o 0 foi mais confundido com o 8. No entanto, não esperávamos que o 1 e o 7 fossem mais confundidos com o 8 e o 8 foi mais confundido com o 1.
 
 
 
 # 4. Florestas Aleatórias (com Estratégias Manuais)
 ```{r}
-# bootstrap --------------------------------------------------------------------
+# função: bs -------------------------------------------------------------------
+# Executa o bootstrap.
 # data banco de dados com a primeira coluna sendo a resposta.
 
 bs <- function(data) {
@@ -107,11 +110,11 @@ bs <- function(data) {
 }
 
 
-# random_forest ----------------------------------------------------------------
-# função que gera floresta aleatória.
+# função: random_forest --------------------------------------------------------
+# Gera floresta aleatória.
 # data banco de dados.
 # n_tree número de árvores.
-# ... parâmetros para o ajuste da função `rpart.
+# ... parâmetros para o ajuste da função `rpart`.
 
 random_forest <- function(data, n_tree, p = NULL, ...) {
   controle <- rpart.control(...)  # controle de parâmetros do rpart
@@ -120,8 +123,8 @@ random_forest <- function(data, n_tree, p = NULL, ...) {
   n <- nrow(data)  # número de observações
   p_tot <- ncol(data)
   classes <- c('0', '1', '7', '8')
-  floresta <- vector(mode = 'list', length = n_tree)  # armazenar as árvores
-  if (is.null(p)) p <- round(sqrt(ncol(data)))  # sugestão apresentada em aula
+  forest <- vector(mode = 'list', length = n_tree)  # armazenar as árvores
+  if (is.null(p)) p <- round(sqrt(ncol(data)))        # sugestão apresentada em aula
   oob_pred <- data.frame(matrix(NA, nrow=n, ncol=n_tree,  # guarda predição por árvore
                             dimnames = list(NULL, paste0(rep('tree'), 1:n_tree))))
   
@@ -132,10 +135,10 @@ random_forest <- function(data, n_tree, p = NULL, ...) {
     colunas_selecionadas <- c(1, sample(2:p_tot, p))  # y e preditoras selecionadas
     db_bs <- data[linhas_sorteadas, colunas_selecionadas]
     
-    floresta[[t]] <- rpart(y ~ ., db_bs, control = controle)  # ajustando arvore
+    forest[[t]] <- rpart(y ~ ., db_bs, control = controle)  # ajustando arvore
     
     oob_data <- data[oob_indices, colunas_selecionadas]  # df de obs. não usadas
-    pred <- predict(floresta[[t]], newdata = oob_data, type = 'class')
+    pred <- predict(forest[[t]], newdata = oob_data, type = 'class')
     oob_pred[oob_indices,t] <- as.character(pred)
   }
   
@@ -144,8 +147,8 @@ random_forest <- function(data, n_tree, p = NULL, ...) {
     if (length(table) == 0) NA else names(which.max(table))
   })
   
-  oob <- mean(pred != data$y, na.rm = T)  # erro oob do modelo
-  oob_class_error <- data.frame(          # erro out of bag por classe
+  oob <- mean(pred != data$y, na.rm = T)  # erro out of bag do modelo
+  oob_class_error <- data.frame(          # acurácia out of bag por classe
     classe_0 = mean(data$y[which(data$y == 0)] == pred[which(data$y == 0)], na.rm=T),
     classe_1 = mean(data$y[which(data$y == 1)] == pred[which(data$y == 1)], na.rm=T),
     classe_7 = mean(data$y[which(data$y == 7)] == pred[which(data$y == 7)], na.rm=T),
@@ -153,15 +156,15 @@ random_forest <- function(data, n_tree, p = NULL, ...) {
   )
   
   return(list(
-    forest = floresta,
+    forest = forest,
     oob_class_error = oob_class_error,
     oob_accuracy = 1 - oob
   ))
 }
 ```
 
-Com a função definida vamos ajustar 6 modelos variando `n_tree`, `p` e `maxdepth`.
-```{r pequena_simulacao}
+Com a função `random_forest` definida vamos ajustar 9 modelos variando o número de árvores (`n_tree`), quantidade de preditoras disponíveis para o modelo (`p`) e tamanho máximo da árvore (`maxdepth`).
+```{r simulacao_de_modelos}
 # ajsutando modelos
 modelos <- list(
   modelo1 = random_forest(mnist, n_tree = 5 , p = 10, maxdepth = 5),
@@ -177,28 +180,24 @@ modelos <- list(
 
 # resultados
 sapply(modelos, \(x) 
-  round(unlist(c(oob_accuracy = x$oob_accuracy, x$oob_class_error)), 4),
-  simplify='matrix') |>
+  round(unlist(c(oob_accuracy = x$oob_accuracy, x$oob_class_error)), 4)) |>
   knitr::kable()
 ```
 
-A tabela apresentada contém as informações da acurácia geral do modelo (primeira linha) e para cada dígito. Além disso, note que os melhores modelos foram o modelo 7 e 8, justamente os que apresentam o maior número de árvores e preditoras por árvore. Além disso, note como o modelo 1 e 2 foram excepcionalmente ruins e são justamente os que apresentam o menor número de árvores e preditoras. Então, os parâmetros que mais parecem importar são: número de árvores (`n_tree`) e quantidade de preditoras no treino (`p`).
+A tabela apresentada contém as informações da acurácia out-of-bag (primeira linha) e para cada dígito em específico dos modelos ajustados. A acurácia out-of-bag verifica o desempenho do modelo analisando a classificação das árvores para observações não utilziadas em seu treino, ou seja, é o mesmo que subtrair de 1 o erro out-of-bag. Logo, uma estimativa da taxa de erro para observações nunca vistas pode ser obtida fazendo a subtração entre 1 e a acurácia out-of-bag.
 
-Uma boa medida para a acurácia do modelo é a acurácia out-of-bag (primeira linha da tabela), ou seja, verifica-se o desempenho do modelo analisando a classificação das árvores para observações não utilziadas em seu treino.
+Além disso, note que os modelos 7, 8 e 9 foram os melhores, justamente os que apresentam o maior número de árvores e preditoras por árvore. Além disso, o modelo 1 e 2 foram excepcionalmente ruins e são justamente os que apresentam o menor número de árvores e preditoras. Então, os parâmetros que mais parecem importar são: o número de árvores (`n_tree`) e quantidade de preditoras no treino (`p`). Ademais, também é possível perceber que aumentar o tamanho máximo da árvore nem sempre gera uma melhora, ocorrendo um acréscimo entre o modelo 1 para o 2; mas um descréscimo entre o modelo 3 para 4 e 5 para 6; e sem mudança significativa do modelo 7 para 8.
+
+Foi determinado que o modelo9 apresenta o melhor resultado, portanto ele será o escolhido para seguir o trabalho. Para este modelo, espera-se que a taxa de acerto para observações nunca vistas seja de, aproximadamente, `r 100 * round(modelos$modelo9$oob_accuracy, 3)`%, ou seja, estima-se que sua taxa de erro será `r 100*round(1 - modelos$modelo9$oob_accuracy, 3)` para novas observações.
 
 Além disso, também testamos ooutros parâmetros, como `minbucket`, mas paraceu não surtir efeito no modelo para valores abaixo de 50, talvez pelo número de observações ser elevado; e `cp`, o qual, para valores grandes, como 1 e 0.5, apresentou um desempenho pior do que quando comparado com valores pequenos, como 0.01, 0.001 e 0.0001.
-
-Por fim, vale ressaltar que entre o modelo 1 e 2 é possível perceber uma piora e a única diferença entre esses modelos com relação aos parâmetros é o `maxdepth`. Como mencionado em aula, aumentar exageradamente uma árvore pode piorar sua predição e, consequentemente, acurária, justamente o que ocorre
 
 
 
 # 5. Análise dos Erros
 
-```{r, eval}
-# ajustando modelo escolhido ---------------------------------------------------
-fit_escolhido <- random_forest(mnist, n_tree = 50, p = 50, maxdepth = 20)
-
-# predict.forest ---------------------------------------------------------------
+```{r plot_dos_possiveis_casos}
+# função: predict.forest -------------------------------------------------------
 # forest precisa ser um objeto da saída da função `random_forest`.
 # data banco de dados para predição.
 
@@ -214,7 +213,7 @@ predict.forest <- function(forest, data) {
 }
 
 # fazendo predição e modificando `converte_df` ---------------------------------
-pred_forest <- predict.forest(modelo1, mnist)
+pred_forest <- predict.forest(modelos$modelo9, mnist)
 mnist_com_pred <- cbind('pred' = pred_forest, mnist)  # juntando dados com predição
 
 # combinando casos
@@ -227,7 +226,7 @@ for (y in c(0,1,7,8)) {
   }
 }
 
-# modificando converte_df 
+# modificando converte_df
 converte_df_mod <- function(data) {
   pos_x <- rep(1:28, each = 28)
   pos_y <- rep(1:28, times = 28)
@@ -249,7 +248,7 @@ erro_long <- converte_df_mod(combinacoes)
 # plot
 visnum(erro_long) +
   facet_grid(rows = vars(pred), cols = vars(y), switch = 'y') +
-  theme_bw(base_size = 15) +
+  theme_bw(base_size = 13) +
   labs(x = 'Verdadeiro', y = 'Predito',
        title = 'Situações possíveis') +
   theme(plot.title = element_text(hjust = 0.5),
@@ -259,17 +258,19 @@ visnum(erro_long) +
         legend.position = 'none')
 ```
 
+Não foi identificado um padrão na forma que os erros ocorrem. Além disso, as observações aparentam pouca ambiguidade. Com excessão da posição (1,3) que é um sete mas parece um zero aberto na parte inferior e (4,3) que é um sete cortado, parecendo um 8, possivelmente sendo o que causa a confusão no modelo e da posição.
+
 
 
 # 6. Predição em Novos Dados
 
 ```{r}
+# lendo novos dados
 mnist_teste <- read.csv('MNIST0178-teste.csv')
+
+# predição para modelo9 (retornando ao tipo original para facilitar correção)
+pred_mnist_teste <- as.numeric(predict.forest(modelos$modelo9, mnist_teste))
+
+# guardando predição
+write.csv(data.frame(predicao = pred_mnist_teste), file='l2-pred-J.csv')
 ```
-
-
-
-
-
-
-
