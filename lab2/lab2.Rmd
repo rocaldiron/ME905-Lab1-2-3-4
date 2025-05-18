@@ -175,7 +175,7 @@ modelos <- list(
   modelo6 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 20),
   modelo7 = random_forest(mnist, n_tree = 50, p = 28, maxdepth = 20),
   modelo8 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 20),
-  modelo9 = random_forest(mnist, n_tree = 100 , p = 28,cp = 0,minsplit = 2,minbucket = 1,maxdepth = 30)
+  modelo9 = random_forest(mnist, n_tree = 100,p = 28, maxdepth = 25, cp = .001)
 )
 
 # resultados
@@ -190,7 +190,9 @@ Além disso, note que os modelos 7, 8 e 9 foram os melhores, justamente os que a
 
 Foi determinado que o modelo9 apresenta o melhor resultado, portanto ele será o escolhido para seguir o trabalho. Para este modelo, espera-se que a taxa de acerto para observações nunca vistas seja de, aproximadamente, `r 100 * round(modelos$modelo9$oob_accuracy, 3)`%, ou seja, estima-se que sua taxa de erro será `r 100*round(1 - modelos$modelo9$oob_accuracy, 3)`% para novas observações.
 
-Além disso, também testamos outros valores para alguns hiperparâmetros, como `minbucket` e `cp`, porém os melhores resultados ocorrem com essas regularizações conjuntamente minímas (ou inexistentes), permitindo que as árvores individuais sobreajustem.
+Além disso, também testamos outros valores para alguns hiperparâmetros, como `minbucket` e `cp`, e os melhores resultados ocorrem com um valor pequeno para `cp`.
+
+
 
 # 5. Análise dos Erros
 
@@ -256,7 +258,7 @@ visnum(erro_long) +
         legend.position = 'none')
 ```
 
-Não foi identificado um padrão na forma que os erros ocorrem. Além disso, as observações aparentam pouca ambiguidade. Com excessão da posição (1,3) que é um sete mas parece um zero aberto na parte inferior e (4,3) que é um sete cortado, parecendo um 8, possivelmente sendo o que causa a confusão no modelo e da posição.
+Alguns números apresentam certa ambiguidade, como o 1 e o 7. Contudo, não foi possível identificar um padrão claro nos erros.
 
 
 
