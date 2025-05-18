@@ -173,9 +173,9 @@ modelos <- list(
   modelo4 = random_forest(mnist, n_tree = 10, p = 28, maxdepth = 20),
   modelo5 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 5),
   modelo6 = random_forest(mnist, n_tree = 15, p = 50, maxdepth = 20),
-  modelo7 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 5),
+  modelo7 = random_forest(mnist, n_tree = 50, p = 28, maxdepth = 20),
   modelo8 = random_forest(mnist, n_tree = 50, p = 50, maxdepth = 20),
-  modelo9 = random_forest(mnist, n_tree = 100, p = 50, maxdepth = 20)
+  modelo9 = random_forest(mnist, n_tree = 100 , p = 28,cp = 0,minsplit = 2,minbucket = 1,maxdepth = 30)
 )
 
 # resultados
@@ -186,13 +186,11 @@ sapply(modelos, \(x)
 
 A tabela apresentada contém as informações da acurácia out-of-bag (primeira linha) e para cada dígito em específico dos modelos ajustados. A acurácia out-of-bag verifica o desempenho do modelo analisando a classificação das árvores para observações não utilziadas em seu treino, ou seja, é o mesmo que subtrair de 1 o erro out-of-bag. Logo, uma estimativa da taxa de erro para observações nunca vistas pode ser obtida fazendo a subtração entre 1 e a acurácia out-of-bag.
 
-Além disso, note que os modelos 7, 8 e 9 foram os melhores, justamente os que apresentam o maior número de árvores e preditoras por árvore. Além disso, o modelo 1 e 2 foram excepcionalmente ruins e são justamente os que apresentam o menor número de árvores e preditoras. Então, os parâmetros que mais parecem importar são: o número de árvores (`n_tree`) e quantidade de preditoras no treino (`p`). Ademais, também é possível perceber que aumentar o tamanho máximo da árvore nem sempre gera uma melhora, ocorrendo um acréscimo entre o modelo 1 para o 2; mas um descréscimo entre o modelo 3 para 4 e 5 para 6; e sem mudança significativa do modelo 7 para 8.
+Além disso, note que os modelos 7, 8 e 9 foram os melhores, justamente os que apresentam o maior número de árvores. Ainda analisando os modelos 7 e 8, observou-se que fixando outros hiperparâmetros, não houve melhora significativa no modelo aumentando a quantidade de preditoras por árvore, até piorando levemente. Os modelos 1 e 2 foram excepcionalmente ruins e são justamente os que apresentam o menor número de árvores. O melhor modelo foi o 9, onde as árvores individuais são de profundidade máxima. Então, o parâmetro que mais parece importar é o número de árvores (`n_tree`), sendo relevante também a falta de limitação nas árvores, buscando profundidade máxima.
 
-Foi determinado que o modelo9 apresenta o melhor resultado, portanto ele será o escolhido para seguir o trabalho. Para este modelo, espera-se que a taxa de acerto para observações nunca vistas seja de, aproximadamente, `r 100 * round(modelos$modelo9$oob_accuracy, 3)`%, ou seja, estima-se que sua taxa de erro será `r 100*round(1 - modelos$modelo9$oob_accuracy, 3)` para novas observações.
+Foi determinado que o modelo9 apresenta o melhor resultado, portanto ele será o escolhido para seguir o trabalho. Para este modelo, espera-se que a taxa de acerto para observações nunca vistas seja de, aproximadamente, `r 100 * round(modelos$modelo9$oob_accuracy, 3)`%, ou seja, estima-se que sua taxa de erro será `r 100*round(1 - modelos$modelo9$oob_accuracy, 3)`% para novas observações.
 
-Além disso, também testamos ooutros parâmetros, como `minbucket`, mas paraceu não surtir efeito no modelo para valores abaixo de 50, talvez pelo número de observações ser elevado; e `cp`, o qual, para valores grandes, como 1 e 0.5, apresentou um desempenho pior do que quando comparado com valores pequenos, como 0.01, 0.001 e 0.0001.
-
-
+Além disso, também testamos outros valores para alguns hiperparâmetros, como `minbucket` e `cp`, porém os melhores resultados ocorrem com essas regularizações conjuntamente minímas (ou inexistentes), permitindo que as árvores individuais sobreajustem.
 
 # 5. Análise dos Erros
 
