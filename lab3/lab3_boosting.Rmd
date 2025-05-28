@@ -1,0 +1,111 @@
+---
+title: "Laboratório 3 - Boosting + SVM"
+author: "ME905"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Instruções
+
+- Baixe os arquivos `MNIST35.csv` e `MNIST35-teste.csv` disponíveis em: https://drive.google.com/drive/folders/1Tcsy6DuRGIaL2Dn34QqsZyeRd7hSo0XZ?usp=sharing.
+- Para a implementação do algoritmo de Boosting, utilize **exclusivamente a função `rpart`** do pacote `rpart` para o treinamento das árvores de decisão.
+- **Não utilize funções ou pacotes que automatizem o processo de validação cruzada.**
+- Além do código, inclua comentários e análises textuais sempre que julgar necessário.
+
+---
+
+## 1. Leitura dos dados
+
+Carregue o conjunto de dados `MNIST35.csv` na variável `mnist`. Esse arquivo contém um `data.frame` com:
+
+- 784 colunas (`x1` a `x784`) representando as covariáveis;
+- 1 coluna chamada `y`, indicando o dígito manuscrito (3 ou 5).
+
+Informações adicionais:
+
+- Cada linha representa uma imagem.
+- As variáveis `x001` a `x784` indicam intensidades em escala de cinza, com valores entre 0 e 255 — quanto maior o valor, mais escuro o pixel.
+- Cada variável representa uma posição em um grid 28x28. Por exemplo, `x2` representa a posição (1,2), enquanto `x30` representa a posição (2,2).
+
+```{r, warning = FALSE, message = FALSE, eval = FALSE}
+library(readr)
+mnist <- read_csv("MNIST35.csv")
+```
+
+---
+
+## 2. Boosting para respostas binárias
+
+Considere o algoritmo de Boosting estudado em aula (Capítulo 8 do livro *Introduction to Statistical Learning*), com a variável resposta
+$y$ assumindo valores 0 (dígito 3) ou 1 (dígito 5).
+
+Adote como preditor inicial (modelo nulo) o valor constante $f_0(x) = 0{,}5$, ou seja, todos os dígitos são inicialmente classificados com probabilidade 0,5 de corresponder ao dígito 5.
+
+Interprete os resíduos obtidos a partir desse modelo inicial.
+
+---
+
+## 3. Implementação do algoritmo de Boosting
+
+Implemente uma função que realize o algoritmo de Boosting no contexto descrito acima. Sua função deve receber como parâmetros:
+
+- A taxa de aprendizado;
+- O número de iterações (ou árvores);
+- A profundidade máxima permitida para cada árvore.
+
+A função deve retornar uma lista com os seguintes elementos:
+
+- O conjunto de dados utilizado no treinamento;
+- O erro quadrático médio de predição no conjunto de treinamento:  
+  $\frac{1}{n} \sum_{i = 1}^n \left( \hat{f}^*(x_i) - y_i \right)^2$;
+- O valor da taxa de aprendizado utilizada;
+- Uma lista contendo as árvores ajustadas em cada iteração.
+
+Utilize essa função para ajustar um preditor ao conjunto de dados `MNIST35`.
+
+(**Sugestão bônus**): Atribua uma classe à lista retornada utilizando `class(lista) <- "nome_da_classe"` e implemente um método `print.nome_da_classe` apropriado.
+
+---
+
+## 4. Função de predição
+
+Implemente uma função para gerar predições a partir do resultado da função de Boosting. Essa função deve receber:
+
+- O objeto resultante do algoritmo de Boosting;
+- Um número $K$ de árvores a serem utilizadas;
+- Um tipo de predição (`"classe"` ou `"prob"`);
+- Um `data.frame` com as colunas `x001`, ..., `x784`.
+
+A função deve retornar as predições correspondentes a cada linha do `data.frame`, considerando apenas as primeiras $K$ árvores. No caso do tipo `"classe"`, as predições devem ser transformadas para 0 ou 1, de acordo com a classe mais provável.
+
+Teste sua função em um subconjunto do `MNIST35` com dois valores de $K$ (um pequeno e outro grande) e compare os resultados.
+
+(**Sugestão bônus**): Caso tenha definido uma classe para o objeto de Boosting, implemente a função de predição via o método `predict.nome_da_classe`.
+
+---
+
+## 5. Curva do erro quadrático médio
+
+Considere duas taxas de aprendizado distintas. Para cada uma, calcule o erro quadrático médio de predição no próprio conjunto de treinamento, variando o número de árvores utilizadas. 
+
+Construa um gráfico com:
+
+- Eixo X: número de árvores utilizadas;
+- Eixo Y: erro quadrático médio;
+- Duas linhas, uma para cada taxa de aprendizado.
+
+---
+
+## 6. Predição em novos dados
+
+O arquivo `MNIST35-teste.csv` contém observações **sem a variável resposta**.
+
+- Com base na sua implementação do Boosting, ajuste um preditor final utilizando a estratégia que considerar mais adequada para a escolha dos parâmetros.
+- Gere as predições (dígito 3 ou 5) para o conjunto `MNIST35-teste.csv`.
+- Salve os resultados em um `data.frame` com uma única coluna chamada `predicao`.
+- Exporte esse `data.frame` no formato `.csv`.
+
+**Entrega:** Submeta o arquivo `.csv` com as predições no Moodle, juntamente com seu relatório.
