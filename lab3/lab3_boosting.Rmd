@@ -6,6 +6,9 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+# packages
+library(rpart)
 ```
 
 # Instruções
@@ -30,21 +33,25 @@ Informações adicionais:
 - As variáveis `x001` a `x784` indicam intensidades em escala de cinza, com valores entre 0 e 255 — quanto maior o valor, mais escuro o pixel.
 - Cada variável representa uma posição em um grid 28x28. Por exemplo, `x2` representa a posição (1,2), enquanto `x30` representa a posição (2,2).
 
-```{r, warning = FALSE, message = FALSE, eval = FALSE}
+```{r, warning=F, message=F}
 library(readr)
 mnist <- read_csv("MNIST35.csv")
+
+# recategorizando 3 em 0 e 5 em 1
+mnist$y <- ifelse(mnist$y == 3, 0, 1)
 ```
 
 ---
 
 ## 2. Boosting para respostas binárias
 
-Considere o algoritmo de Boosting estudado em aula (Capítulo 8 do livro *Introduction to Statistical Learning*), com a variável resposta
-$y$ assumindo valores 0 (dígito 3) ou 1 (dígito 5).
+Considere o algoritmo de Boosting estudado em aula (Capítulo 8 do livro *Introduction to Statistical Learning*), com a variável resposta $y$ assumindo valores 0 (dígito 3) ou 1 (dígito 5).
 
 Adote como preditor inicial (modelo nulo) o valor constante $f_0(x) = 0{,}5$, ou seja, todos os dígitos são inicialmente classificados com probabilidade 0,5 de corresponder ao dígito 5.
 
 Interprete os resíduos obtidos a partir desse modelo inicial.
+
+Teremos dois casos, o primeiro será quando a resposta for $1$, então, nosso resíduo será $1 - 0.5 = 0.5$, o segundo caso ocorre quando nossa resposta é $0$ gerando o resíduo $0 - 0.5 = -0.5$.
 
 ---
 
@@ -67,6 +74,47 @@ A função deve retornar uma lista com os seguintes elementos:
 Utilize essa função para ajustar um preditor ao conjunto de dados `MNIST35`.
 
 (**Sugestão bônus**): Atribua uma classe à lista retornada utilizando `class(lista) <- "nome_da_classe"` e implemente um método `print.nome_da_classe` apropriado.
+
+```{r}
+# Definindo funções ------------------------------------------------------------
+
+boosting <- function(f0 = 0.5, lambda, n_tree, tree_depth, data) {
+  n <- nrow(data)
+  pred <- rep(0, n)
+  df <- cbind('y' = data$y - f0, data[-1])
+  forest <- list()
+  
+  # ajustando árvores
+  for (i in 1:n_tree) {
+    forest[[i]] <- rpart(y ~ . , df)
+    df$y <- df$y - lambda * predict(forest[[i]])  # atualizando resíduo
+  }
+  
+  # predição final
+  f <- cbind(f0,
+    lapply(forest, \(x) predict(x)) |> cbind.data.frame() * lambda) |> unname()
+  EQM <- mean((rowSums(f) - data$y)^2)
+  
+  result <- list(data = data, forest = forest, lambda = lambda, EQM = EQM)
+  class(result) <- 'boosting'
+  return(result)
+}
+
+
+print.boosting <- function(modelo) {
+  cat('EQM:', round(modelo$EQM, 4),
+      '\nlambda:', modelo$lambda)
+}
+```
+
+```{r}
+lambda <- 0.5    # taxa de aprendizado
+n_tree <- 4      # número de árvores
+tree_depth <- 1  # profundidade máxima da árvore
+
+teste <- boosting(0.5, lambda = 0.5, n_tree = 3, tree_depth = 1, data = mnist)
+```
+
 
 ---
 
