@@ -86,7 +86,7 @@ boosting <- function(f0 = 0.5, lambda, n_tree, tree_depth, data) {
   
   # ajustando árvores
   for (i in 1:n_tree) {
-    forest[[i]] <- rpart(y ~ . , df)
+    forest[[i]] <- rpart(y ~ . , df, control = rpart.control(maxdepth = tree_depth))
     df$y <- df$y - lambda * predict(forest[[i]])  # atualizando resíduo
   }
   
