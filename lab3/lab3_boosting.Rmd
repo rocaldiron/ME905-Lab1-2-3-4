@@ -101,7 +101,7 @@ boosting <- function(f0 = 0.5, lambda, n_tree, tree_depth, data) {
   f_hat <- unname(cbind(f0, cbind.data.frame(lapply(forest, predict)) * lambda))
   EQM <- mean((rowSums(f_hat) - data$y)^2)
   
-  result <- list(data = data, EQM = EQM, lambda = lambda, forest = forest)
+  result <- list(data = data, EQM = EQM, lambda = lambda, forest = forest, f0 = f0)
   class(result) <- 'boosting'
   return(result)
 }
@@ -113,12 +113,8 @@ print.boosting <- function(modelo) {
 }
 ```
 
-```{r}
+```{r, eval = F, echo = F}
 # testando função
-lambda <- 0.5    # taxa de aprendizado
-n_tree <- 4      # número de árvores
-tree_depth <- 1  # profundidade máxima da árvore
-
 boost <- boosting(0.5, lambda = 0.5, n_tree = 3, tree_depth = 1, data = mnist)
 boost
 ```
@@ -144,7 +140,7 @@ Teste sua função em um subconjunto do `MNIST35` com dois valores de $K$ (um pe
 ```{r}
 # função: predict.boosting --------
 # boosting_result objeto da classe `boosting`
-# k número de árvores a serem utilizadas
+# k número de árvores a serem utilizadas, sem contar f0
 # type tipo de predição (`"classe"` ou `"prob"`)
 # newdata data frame contendo os valores das preditoras
 
@@ -154,13 +150,13 @@ predict.boosting <- function(boosting_result, k, type = c('classe', 'prob'),
     stop('boosting_result apresenta classe errada')
   if (missing(newdata)) data <- boosting_result$data
   type <- match.arg(type)
-  if (type == 'classe') {
-    lapply(boosting_result, \(tree) predict(tree, newdata = data))  # continuar aqui
-  }
-  else  # fazer caso para type = `prob`
+  pred <- rowSums(cbind(boosting_result$f0, boosting_result$lambda *
+                         cbind.data.frame(lapply(boosting_result$forest[1:k],
+                                  \(tree) predict(tree, newdata = data)))))
+  if (type == 'classe') pred <- ifelse(pred > 0.5, 1, 0)
+  return(pred)
 }
-debug(predict.boosting)
-predict(boosting_result=boost, k=3, type='prob')
+# pred <- predict(boosting_result=boost, k = 3, type = 'classe')
 ```
 
 
@@ -168,13 +164,34 @@ predict(boosting_result=boost, k=3, type='prob')
 
 ## 5. Curva do erro quadrático médio
 
-Considere duas taxas de aprendizado distintas. Para cada uma, calcule o erro quadrático médio de predição no próprio conjunto de treinamento, variando o número de árvores utilizadas. 
+Considere duas taxas de aprendizado distintas. Para cada uma, calcule o erro quadrático médio de predição no próprio conjunto de treinamento, variando o número de árvores utilizadas.
 
 Construa um gráfico com:
 
 - Eixo X: número de árvores utilizadas;
 - Eixo Y: erro quadrático médio;
 - Duas linhas, uma para cada taxa de aprendizado.
+
+```{r}
+# ajustando boosting
+n_tree <- 4
+boost1 <- boosting(f0 = 0.5, lambda=0.8, n_tree, tree_depth = 1, data = mnist)
+boost2 <- boosting(f0 = 0.5, lambda=0.2, n_tree, tree_depth = 1, data = mnist)
+
+# computando EQM
+pred1 <- vector(mode = 'numeric', length = n_tree + 1)
+pred2 <- vector(mode = 'numeric', length = n_tree + 1)
+
+for (i in 0:n_tree) {
+  pred1[i + 1] <- mean((predict(boost1, k = i, type = 'prob') - mnist$y)^2)
+  pred2[i + 1] <- mean((predict(boost2, k = i, type = 'prob') - mnist$y)^2)
+}
+
+# plot
+plot(0:n_tree, pred1, ylab='EQM', type = 'b')
+plot(0:n_tree, pred2, ylab='EQM', type = 'b')
+```
+
 
 ---
 
