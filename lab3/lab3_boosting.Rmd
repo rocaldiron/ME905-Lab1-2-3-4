@@ -4,13 +4,14 @@ author: "ME905"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=F}
 knitr::opts_chunk$set(echo = TRUE)
 
 set.seed(123123)
 
 # packages
 library(rpart)
+library(doFuture)
 ```
 
 # Instruções
@@ -149,14 +150,19 @@ predict.boosting <- function(boosting_result, k, type = c('classe', 'prob'),
   if (class(boosting_result) != 'boosting')
     stop('boosting_result apresenta classe errada')
   if (missing(newdata)) data <- boosting_result$data
+  else data <- newdata
+  if (missing(k)) k <- length(boosting_result$forest) + 1
   type <- match.arg(type)
-  pred <- rowSums(cbind(boosting_result$f0, boosting_result$lambda *
-                         cbind.data.frame(lapply(boosting_result$forest[1:k],
-                                  \(tree) predict(tree, newdata = data)))))
+  if (k == 0) pred <- boosting_result$f0
+  else {
+    pred <- rowSums(  # tentar reescrever essa parte para aumentar eficiência, tentar usar vappaly, mudar cbind.data.frame para um comando mais eficiente
+      cbind(boosting_result$f0, boosting_result$lambda *
+              cbind.data.frame(lapply(boosting_result$forest[1:k],
+                                      \(tree) predict(tree, newdata = data)))))
+  }
   if (type == 'classe') pred <- ifelse(pred > 0.5, 1, 0)
   return(pred)
 }
-# pred <- predict(boosting_result=boost, k = 3, type = 'classe')
 ```
 
 
@@ -173,10 +179,54 @@ Construa um gráfico com:
 - Duas linhas, uma para cada taxa de aprendizado.
 
 ```{r}
+# função: plot.boosting -----------
+# boosting_result objeto da classe `boosting`
+# col cor da linha
+# newdata data frame contendo os valores das preditoras
+# add_plot se TRUE, o gráfico é adicionado ao anterior
+
+plot.boosting <- function(boosting_result, col, newdata, add_plot = F) {
+  n_tree <- length(boosting_result$forest)  # não conta com f0
+  EQM <- vector(mode = 'numeric', length = n_tree + 1)
+  if (missing(col)) col <- 'black'
+  if (missing(newdata)) newdata <- boosting_result$data
+  
+  for (i in 0:n_tree) {
+    EQM[i+1] <- mean(
+      (predict(boosting_result, k = i, type = 'prob', newdata = newdata) -
+         newdata$y)^2)
+  }
+  
+  if (isFALSE(add_plot))
+    plot(0:n_tree, EQM, xlab = 'Número de Árvores', type = 'b', col = col)
+  else
+    lines(0:n_tree, EQM, xlab = 'Número de Árvores', type = 'b', col = col)
+}
+
+
+# ajustando modelos ---------------
+boost1 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 5, tree_depth = 1, data = mnist)
+boost2 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 15, tree_depth = 1, data = mnist)
+boost3 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 30, tree_depth = 1, data = mnist)
+
+# plot
+plot(boost3)
+plot(boost2, col = 'darkgray', add_plot = T)
+plot(boost1, col = 'blue', add_plot = T)
+```
+
+
+```{r}
+# debug(plot.boosting)
+boost <- boosting(f0 = 0.5, lambda = 0.8, n_tree = 8, tree_depth = 1, data = mnist)
+
+plot(boost)
+
+
 # ajustando boosting
 n_tree <- 4
-boost1 <- boosting(f0 = 0.5, lambda=0.8, n_tree, tree_depth = 1, data = mnist)
-boost2 <- boosting(f0 = 0.5, lambda=0.2, n_tree, tree_depth = 1, data = mnist)
+boost1 <- boosting(f0 = 0.5, lambda = 0.8, n_tree, tree_depth = 1, data = mnist)
+boost2 <- boosting(f0 = 0.5, lambda = 0.2, n_tree, tree_depth = 1, data = mnist)
 
 # computando EQM
 pred1 <- vector(mode = 'numeric', length = n_tree + 1)
