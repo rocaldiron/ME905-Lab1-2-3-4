@@ -1,0 +1,179 @@
+---
+title: "Laboratório 4 – Predição e Decisão"
+author: "ME905"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# packages
+library(neuralnet)
+```
+
+# Instruções Gerais
+
+- Baixe os arquivos `produtos_treino.csv`, `produtos_valida.csv` e `produtos_teste.csv` disponíveis em:  
+[https://drive.google.com/drive/folders/1wLey8vhtYhYPEnI2lqL3FOEhSSJisb_k?usp=sharing](https://drive.google.com/drive/folders/1wLey8vhtYhYPEnI2lqL3FOEhSSJisb_k?usp=sharing)
+
+- Utilize qualquer pacote ou função que achar adequado para ajuste dos modelos e validação cruzada, desde que os métodos tenham sido discutidos em aula.
+
+- Além do código, inclua explicações em texto sempre que considerar necessário. Justifique suas escolhas de métodos, parâmetros e comente os resultados obtidos.
+
+- Seu relatório deve ser claro, organizado e bem documentado.
+
+---
+
+## 1. Leitura dos Dados
+
+Carregue o conjunto de treino (`produtos_treino.csv`), que contém um `data.frame` com:
+
+- **20 colunas (`x1` a `x20`)**: covariáveis descritivas dos produtos (cada linha corresponde a uma unidade);
+- **Coluna `y`**: variável resposta, indicando se o produto está com defeito (`y = 1`) ou funcionando (`y = 0`);
+- **Coluna `cost`**: custo de compra de cada produto (para os exercícios a partir do 4).
+
+```{r, warning=FALSE, message=FALSE}
+library(readr)
+treino <- read_csv('produtos_treino.csv')
+```
+
+---
+
+## 2. Ajuste de Modelos
+
+Utilizando os métodos estudados ao longo do semestre, ajuste um modelo para estimar a probabilidade de que um produto esteja com defeito (`y = 1`), com base nas variáveis `x1` a `x20`.
+
+**Orientações:**
+
+- Utilize apenas os dados de treino (`produtos_treino.csv`) nesta etapa.
+
+- Caso julgue necessário, use validação cruzada para avaliar o desempenho dos modelos.
+
+- Apresente as diferentes abordagens testadas (métodos, escolha de hiperparâmetros, etc).
+
+- Comente as métricas de desempenho obtidas (por exemplo: acurácia), destacando a escolha do modelo final.
+
+```{r}
+set.seed(123)
+fit1 <- neuralnet(y ~ . - cost, data = treino, hidden = c(20, 5, 20),
+                  linear.output = FALSE, act.fct = 'logistic',
+                  lifesign = 'full')
+predict(fit1, newdata = treino)
+
+# modelo escolhido
+fit <- fit1
+```
+
+
+---
+
+## 3. Predição e Avaliação
+
+Utilize o modelo final para gerar predições no conjunto de validação (`produtos_valida.csv`).
+
+**Tarefas:**
+
+- Calcule as probabilidades previstas de `y = 1` para os produtos da validação.
+
+- Escolha um critério de classificação para converter as probabilidades em predições binárias.
+
+- Construa a matriz de confusão e comente os resultados.
+
+```{r, warning=FALSE, message=FALSE}
+valida <- read_csv('produtos_valida.csv')
+pred <- ifelse(predict(fit, newdata = valida) >= 0.5, 1, 0)
+table('modelo'=pred, 'verdadeiro'=valida$y)
+```
+
+
+---
+
+## 4. Decisão Baseada em Custos
+
+Suponha que:
+
+- Cada produto pode ser comprado pelo valor especificado na variável `cost`;
+
+- Produtos funcionando (`y = 0`) podem ser revendidos por **110**;
+
+- Não é possível saber previamente se um produto está quebrado.
+
+**Tarefa:**
+
+- Determine uma regra de decisão, com base nas probabilidades preditas, que maximize o lucro esperado.
+
+- Sua regra deve indicar, para cada produto, se ele deve ser comprado ou não.
+
+Para modelar o problema, considere:
+
+- $\phi$: Preço de revenda do $i$-ésimo produto ($110$);
+- $\psi_i$: Preço de compra do $i$-ésimo produto (variável *cost*);
+- $\hat y$: Probabilidade do produto estar quebrado;
+- Decisão: com base na probabilidade estimada do produto estar quebrado, vamos determinar se devemos comprá-lo ($d=1$) ou não ($d=0$).
+
+Matriz de "Perda":
+\begin{tabular}{cccc}
+    &   & y\\
+    &   & 0                  & 1\\
+  d & 0 & 0                  & 0\\
+    & 1 & $-(\phi - \psi_i)$ & $\psi_i$\\
+\end{tabular}
+
+
+```{r}
+# é para o banco de dados valida?
+val_venda <- 110
+
+```
+
+
+---
+
+## 5. Validação da Regra de Decisão
+
+Aplique sua regra de decisão ao conjunto de validação (`produtos_valida.csv`).
+
+**Responda às perguntas:**
+
+- Quantos produtos seriam comprados? Quantos não seriam?
+
+- Qual seria o lucro (ou prejuízo) total ao final do processo de compra e revenda?
+
+- Comente os resultados, avaliando se a decisão parece vantajosa.
+
+---
+
+## 6. Aplicação a Novos Dados
+
+O arquivo `produtos_teste.csv` contém um novo conjunto de produtos, **sem a variável resposta `y`**.
+
+**Tarefa:**
+
+- Aplique o modelo treinado e sua regra de decisão a esse conjunto.
+
+- Gere um arquivo `.csv` contendo apenas uma coluna chamada `d`, com as seguintes codificações:
+
+    - `d = 1`: decisão de **comprar** o produto;
+
+    - `d = 0`: decisão de **não comprar**.
+
+**Exemplo de saída:**
+
+| d |
+|---|
+| 1 |
+| 0 |
+| 0 |
+| 1 |
+
+---
+
+## 7. Entrega
+
+- Submeta no Moodle:
+
+  1. Seu **relatório completo** (em PDF gerado a partir deste Rmd).
+
+  2. O **arquivo `.csv` com as decisões** (`d`) para o conjunto de teste.
