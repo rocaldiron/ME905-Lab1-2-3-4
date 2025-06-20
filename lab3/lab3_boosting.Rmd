@@ -195,12 +195,13 @@ Construa um gráfico com:
 # col cor da linha
 # add_plot se TRUE, o gráfico é adicionado ao anterior
 
-plot.boosting <- function(boosting_result, col, add_plot = F) {
+plot.boosting <- function(boosting_result, col, add_plot = F, newdata) {
+  if (missing(newdata)) newdata <- boosting_result$data
   n_tree <- length(boosting_result$forest)  # não conta com f0
   EQM <- vector(mode = 'numeric', length = n_tree + 1)
   if (missing(col)) col <- 'black'
   
-  df_pred <- predict(boosting_result, type = 'prob', pred_plot = T)
+  df_pred <- predict(boosting_result, type = 'prob', pred_plot = T, newdata=newdata)
   
   for (i in 1:ncol(df_pred)) {
     EQM[i] <- mean((rowSums(df_pred[, 1:i, drop = F]) - boosting_result$data$y)^2)
@@ -223,13 +224,6 @@ legend('topright', title = expression('valor de ' * lambda), bty = 'n', lty=1,
        pch=21, pt.bg = 'white', legend = c(0.75, 0.25), col = c('black', 'blue'))
 ```
 
-```{r, echo=F, eval=F}
-# testando função
-boost <- boosting(0.5, lambda = 0.5, n_tree = 15, tree_depth = 1, data = mnist)
-debug(plot.boosting)
-plot(boost)
-```
-
 
 ---
 
@@ -244,13 +238,37 @@ O arquivo `MNIST35-teste.csv` contém observações **sem a variável resposta**
 
 **Entrega:** Submeta o arquivo `.csv` com as predições no Moodle, juntamente com seu relatório.
 
+<!-- Para diminuir o tempo de processamento, apenas 4 modelos serão investigados, os cenários serão, $\lambda$ baixo ($0.5$) e alto ($0.85$); `n_tree` baixo ($200$) e alto ($300$). -->
 
 ```{r Q6}
-fit <- boosting(f0 = 0.5, lambda = 0.8, n_tree = 200, tree_depth = 1, data = mnist)
-predicao <- predict(fit, type = 'classe')
-table(predicao, mnist$y)  # matriz de confusão
-plot(fit)
-result <- data.frame(predicao = ifelse(predicao == 0, 3, 5))
-write.csv(result, 'l3-pred-J.csv')
+# hold out 75/25
+i_treino <- sample(1:nrow(mnist), size = nrow(mnist)*0.75, replace = F)
+sample_treino <- mnist[i_treino,]
+sample_teste <- mnist[-i_treino,]
+
+# ajustando melhor modelo
+fit1 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 200, tree_depth = 1, data = sample_treino)
+fit2 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 200, tree_depth = 1, data = sample_treino)
+# fit3 <- boosting(f0 = 0.5, lambda = 0.85, n_tree = 200, tree_depth = 1, data = sample_treino)
+# fit4 <- boosting(f0 = 0.5, lambda = 0.85, n_tree = 300, tree_depth = 1, data = sample_treino)
+
+plot(fit2)
+plot(fit1, col = 'blue', add_plot = T)
+# plot(fit3, col = 'red', add_plot = T)
+# plot(fit4, col = 'darkgreen', add_plot = T)
+# legend('topright', legend=c('modelo 1', 'modelo 2', 'modelo 3', 'modelo 4'),
+#        col='blue', 'black', 'red', 'darkgreen', bty='n')
+```
+
+Com base nos gráficos
+
+```{r Q6}
+# table(predicao, mnist$y)  # matriz de confusão
+
+# predição
+# mnist_teste <- read_csv('MNIST35-teste.csv')
+# pred <- predict(fit, type = 'classe', newdata = mnist_teste)
+# result <- ifelse(pred == 0, 3, 5)
+# write_csv(pred, 'l3-pred-J.csv')
 ```
 
