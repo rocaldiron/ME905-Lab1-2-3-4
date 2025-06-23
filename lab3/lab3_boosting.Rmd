@@ -109,11 +109,12 @@ boosting <- function(f0 = 0.5, lambda, n_tree, tree_depth, data) {
 # função: print.boosting ----------
 print.boosting <- function(modelo) {
   cat('EQM:', round(modelo$EQM, 4),
-      '\nlambda:', modelo$lambda)
+      '\nlambda:', modelo$lambda,
+      '\nnum tree:', length(modelo$forest))  # não considera f0
 }
 ```
 
-```{r, eval = F, echo = F}
+```{r, eval=F, echo=F}
 # testando função
 boost <- boosting(0.5, lambda = 0.5, n_tree = 3, tree_depth = 1, data = mnist)
 boost
@@ -195,22 +196,23 @@ Construa um gráfico com:
 # col cor da linha
 # add_plot se TRUE, o gráfico é adicionado ao anterior
 
-plot.boosting <- function(boosting_result, col, add_plot = F, newdata) {
-  if (missing(newdata)) newdata <- boosting_result$data
+plot.boosting <- function(boosting_result, col, add_plot = F, type = 'b', newdata) {
   n_tree <- length(boosting_result$forest)  # não conta com f0
   EQM <- vector(mode = 'numeric', length = n_tree + 1)
+  if (missing(newdata)) newdata <- boosting_result$data
   if (missing(col)) col <- 'black'
   
-  df_pred <- predict(boosting_result, type = 'prob', pred_plot = T, newdata=newdata)
+  df_pred <- predict(boosting_result, type = 'prob', pred_plot = T,
+                     newdata = newdata)
   
   for (i in 1:ncol(df_pred)) {
-    EQM[i] <- mean((rowSums(df_pred[, 1:i, drop = F]) - boosting_result$data$y)^2)
+    EQM[i] <- mean((rowSums(df_pred[, 1:i, drop = F]) - newdata$y)^2)
   }
   
   if (isFALSE(add_plot))
-    plot(0:n_tree, EQM, xlab = 'Número de Árvores', type = 'b', col = col)
+    plot(0:n_tree, EQM, xlab = 'Número de Árvores', type = type, col = col)
   else
-    lines(0:n_tree, EQM, xlab = 'Número de Árvores', type = 'b', col = col)
+    lines(0:n_tree, EQM, xlab = 'Número de Árvores', type = type, col = col)
 }
 
 # ajustando modelos ---------------
@@ -238,7 +240,7 @@ O arquivo `MNIST35-teste.csv` contém observações **sem a variável resposta**
 
 **Entrega:** Submeta o arquivo `.csv` com as predições no Moodle, juntamente com seu relatório.
 
-<!-- Para diminuir o tempo de processamento, apenas 4 modelos serão investigados, os cenários serão, $\lambda$ baixo ($0.5$) e alto ($0.85$); `n_tree` baixo ($200$) e alto ($300$). -->
+Para diminuir o tempo de processamento, apenas 6 modelos serão investigados, os cenários serão, $\lambda$ baixo ($0.5$) e alto ($0.9$), profundidade da árvore (`tree_depth`) pequena ($1$), média ($3$) e grande ($5$). Além disso, a quantidade de árvores não foi tão investigada já que após 30 árvores, notou-se que os modelos tendem a estabilziar o EQM.
 
 ```{r Q6}
 # hold out 75/25
@@ -247,28 +249,40 @@ sample_treino <- mnist[i_treino,]
 sample_teste <- mnist[-i_treino,]
 
 # ajustando melhor modelo
-fit1 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 200, tree_depth = 1, data = sample_treino)
-fit2 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 200, tree_depth = 1, data = sample_treino)
-# fit3 <- boosting(f0 = 0.5, lambda = 0.85, n_tree = 200, tree_depth = 1, data = sample_treino)
-# fit4 <- boosting(f0 = 0.5, lambda = 0.85, n_tree = 300, tree_depth = 1, data = sample_treino)
+fit1 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 50, tree_depth = 1, data = sample_treino)
+fit2 <- boosting(f0 = 0.5, lambda = 0.9, n_tree = 50, tree_depth = 1, data = sample_treino)
+fit3 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 50, tree_depth = 3, data = sample_treino)
+fit4 <- boosting(f0 = 0.5, lambda = 0.9, n_tree = 50, tree_depth = 3, data = sample_treino)
+fit5 <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 50, tree_depth = 5, data = sample_treino)
+fit6 <- boosting(f0 = 0.5, lambda = 0.9, n_tree = 50, tree_depth = 5, data = sample_treino)
 
-plot(fit2)
-plot(fit1, col = 'blue', add_plot = T)
-# plot(fit3, col = 'red', add_plot = T)
-# plot(fit4, col = 'darkgreen', add_plot = T)
-# legend('topright', legend=c('modelo 1', 'modelo 2', 'modelo 3', 'modelo 4'),
-#        col='blue', 'black', 'red', 'darkgreen', bty='n')
+plot(fit5, newdata = sample_teste)
+plot(fit6, newdata = sample_teste, col = 'purple', add_plot = T)
+plot(fit4, newdata = sample_teste, col = 'orange', add_plot = T)
+plot(fit3, newdata = sample_teste, col = 'green', add_plot = T)
+plot(fit2, newdata = sample_teste, col = 'blue', add_plot = T)
+plot(fit1, newdata = sample_teste, col = 'red', add_plot = T)
+legend('topright', bty = 'n', lwd = 2,
+       col = c('red', 'blue', 'green', 'orange', 'black', 'purple'),
+       legend = c(expression(lambda == 0.5 ~ ' e tree_depth' == 1),
+                  expression(lambda == 0.9 ~ ' e tree_depth' == 1),
+                  expression(lambda == 0.5 ~ ' e tree_depth' == 3),
+                  expression(lambda == 0.9 ~ ' e tree_depth' == 3),
+                  expression(lambda == 0.5 ~ ' e tree_depth' == 5),
+                  expression(lambda == 0.9 ~ ' e tree_depth' == 5)))
 ```
 
-Com base nos gráficos
+Com base nos gráficos, é possível ver que o melhor ajuste foi $\lambda = 0.5$ e `tree_depth` = 5.
 
 ```{r Q6}
-# table(predicao, mnist$y)  # matriz de confusão
+# modelo escolhido
+fit <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 50, tree_depth = 5, data = mnist)
+table('modelo'=predict(fit), 'verdadeiro'=mnist$y)  # matriz de confusão
 
 # predição
-# mnist_teste <- read_csv('MNIST35-teste.csv')
-# pred <- predict(fit, type = 'classe', newdata = mnist_teste)
-# result <- ifelse(pred == 0, 3, 5)
-# write_csv(pred, 'l3-pred-J.csv')
+mnist_teste <- read_csv('MNIST35-teste.csv')
+pred <- predict(fit, type = 'classe', newdata = mnist_teste)
+result <- ifelse(pred == 0, 3, 5)
+write_csv(pred, 'l3-pred-J.csv')
 ```
 
