@@ -60,12 +60,22 @@ set.seed(123)
 fit1 <- neuralnet(y ~ . - cost, data = treino, hidden = c(20, 5, 20),
                   linear.output = FALSE, act.fct = 'logistic',
                   lifesign = 'full')
-predict(fit1, newdata = treino)
+#predict(fit1, newdata = treino)
 
 # modelo escolhido
 fit <- fit1
 ```
 
+Em relação aos hiperparâmetros, notou-se que utilizar a estratégia de afunilar e crescer de novo os números de neurons, isto é, colocar um número alto na primeira camada de neurons, e depois diminuir na segunda, permitia em geral uma convergência mais rápida e uma estabilização no erro. É válido ressaltar que pode ter sido uma mera coincidência, mas vale a justificativa do gradiente estabilizar mais na hora do cálculo do erro. Por sua vez, o cenário em que havia pouco neuron na primeira camada para muitos neurons na segunda era demorado e instável. 
+
+A primeira camada é crucial, pois ela diz quantas combinações são relevantes. A título de exemplo, considerando um hidden = c(2, 100), isso equivale a dizer que no máximo duas combinações da minha variável são suficientes para classificação.
+
+Obviamente, o argumento do threshold (menor valor absoluto da derivada parcial) foi fundamental para a rapidez da convergência. No sentido de que se ele for um valor pequeno, isso significa que o próximo passo é andar pouco, logo, não "compensa" nem andar.
+
+A acurácia foi boa no geral, mas pensando em predizer se o produto não estava quebrado de fato, do que predizer se estava quebrado. Isso se deve a uma quantidade bem maior de itens não quebrados do que os danificados.
+
+Sensitividade = P(Teste + | Doença Presente)
+Especificidade = P(Teste − | Doença Ausente)
 
 ---
 
@@ -128,7 +138,12 @@ val_venda <- 110
 
 ```
 
+A regra de decisão é dada pelo valor esperado da Tabela 1, ou seja, $-(\phi - \psi_i)(1-\hat y) + \hat y\psi_i < 0$ menor que zero para o custo esperado de não comprar o produto (d=0)
+isto é
+$\hat y < \dfrac{\phi-\psi_i}{\phi} = a$
+intuição: para minimizar o custo esperado da decisão, quanto mais caro for o produto, menor o limiar (a) para a compra. Em outras palavras, mesmo que o produto barato tenha uma probabilidade estimada maior de quebra, ele vale mais a pena do que um caro com probabilidade baixa devido ao preço de revenda fixo $\phi$.
 
+exemplo: considere $\phi = 100$ e $\psi_1 = 10$. use seus neuronios
 ---
 
 ## 5. Validação da Regra de Decisão
@@ -142,6 +157,8 @@ Aplique sua regra de decisão ao conjunto de validação (`produtos_valida.csv`)
 - Qual seria o lucro (ou prejuízo) total ao final do processo de compra e revenda?
 
 - Comente os resultados, avaliando se a decisão parece vantajosa.
+
+parece vantajosa, afinal estamos ganhando dinheiro. O valor de $\phi$ ser fixo e maior do que qualquer custo de compra influencia nessa tomada de decisão
 
 ---
 
