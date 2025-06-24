@@ -1,6 +1,6 @@
 ---
-title: "Laboratório 4 – Predição e Decisão"
-author: "ME905"
+title: 'Laboratório 4 – Predição e Decisão'
+author: 'ME905'
 output: pdf_document
 editor_options: 
   chunk_output_type: console
@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # packages
 library(neuralnet)
+library(randomForest)
+library(ggplot2)
 ```
 
 # Instruções Gerais
@@ -37,6 +39,7 @@ Carregue o conjunto de treino (`produtos_treino.csv`), que contém um `data.fram
 ```{r, warning=FALSE, message=FALSE}
 library(readr)
 treino <- read_csv('produtos_treino.csv')
+treino$y <- factor(treino$y)
 ```
 
 ---
@@ -57,25 +60,44 @@ Utilizando os métodos estudados ao longo do semestre, ajuste um modelo para est
 
 ```{r}
 set.seed(123)
-fit1 <- neuralnet(y ~ . - cost, data = treino, hidden = c(20, 5, 20),
-                  linear.output = FALSE, act.fct = 'logistic',
-                  lifesign = 'full')
-#predict(fit1, newdata = treino)
+
+# hold out 80/20
+i_treino <- sample(1:1000, size = 800, replace = F)
+sample_treino <- treino[i_treino,]
+sample_teste <- treino[-i_treino,]
+
+# ajustando modelos
+fit1 <- neuralnet(y ~ . - cost, data = sample_treino, hidden = c(20, 15, 20),
+                  linear.output = FALSE, act.fct = 'logistic', lifesign = 'full')
+pred1 <- apply(predict(fit1, newdata = sample_teste), MARGIN = 1, which.max) - 1
+tab1 <- table('modelo' = pred1, 'dados' = sample_teste$y)
+acuracia1 <- (tab1[1] + tab1[4]) / sum(tab1)
+tab1  # matriz de confusão
+
+fit2 <- randomForest(y ~ . - cost, data = sample_treino, ntree = 1000)
+pred2 <- predict(fit2, newdata = sample_teste)
+tab2 <- table('modelo' = pred2, 'dados' = sample_teste$y)
+acuracia2 <- (tab2[1] + tab2[4]) / sum(tab2)
+tab2  # matriz de confusão
 
 # modelo escolhido
-fit <- fit1
+fit <- neuralnet(y ~ . - cost, data = treino, hidden = c(20, 15, 20),
+                 linear.output = FALSE, act.fct = 'logistic', lifesign = 'full')
 ```
 
-Em relação aos hiperparâmetros, notou-se que utilizar a estratégia de afunilar e crescer de novo os números de neurons, isto é, colocar um número alto na primeira camada de neurons, e depois diminuir na segunda, permitia em geral uma convergência mais rápida e uma estabilização no erro. É válido ressaltar que pode ter sido uma mera coincidência, mas vale a justificativa do gradiente estabilizar mais na hora do cálculo do erro. Por sua vez, o cenário em que havia pouco neuron na primeira camada para muitos neurons na segunda era demorado e instável. 
 
-A primeira camada é crucial, pois ela diz quantas combinações são relevantes. A título de exemplo, considerando um hidden = c(2, 100), isso equivale a dizer que no máximo duas combinações da minha variável são suficientes para classificação.
+Foram feitas diversas tentativas manuais para a escolha da quantidade de neurons nas camadas ocultas da rede neural, sendo o melhor valor encontrado `hidden = c(20, 15, 20)`. Além disso, durante os testes, notou-se que utilziar a estratégia de afunilar e crescer de novo os números de neurons, isto é, colocar um número alto na primeira camada de neurons, e depois diminuir na segunda, permitia em geral uma convergência mais rápida e uma estabilização no erro, neste caso. É válido ressaltar que pode ter sido uma mera coincidência, mas vale a justificativa do gradiente estabilizar mais na hora do cálculo do erro. Por sua vez, o cenário em que havia poucos neurons na primeira camada para muitos neurons na segunda era muito demorado, instável e muitas vezes não convergia.
 
-Obviamente, o argumento do threshold (menor valor absoluto da derivada parcial) foi fundamental para a rapidez da convergência. No sentido de que se ele for um valor pequeno, isso significa que o próximo passo é andar pouco, logo, não "compensa" nem andar.
+Ademais, ressalta-se que primeira camada é crucial, pois ela determina a quantidade de combinações iniciais. Um exemplo (informal) é dado por: considerando `hidden = c(2, 100)` o modelo é limitado a apenas duas combinações das preditoras mas com uma certa flexibilidade, enquato `hidden = c(100, 2)` limita o modelo à 100 combinações das preditoras mas com menos flexibilidade que a anterior.
 
-A acurácia foi boa no geral, mas pensando em predizer se o produto não estava quebrado de fato, do que predizer se estava quebrado. Isso se deve a uma quantidade bem maior de itens não quebrados do que os danificados.
+Além disso, o parâmetro `threshold` (menor valor absoluto da derivada parcial) foi fundamental para a rapidez da convergência. No sentido de que se ele for um valor pequeno, isso significa que o próximo passo é andar pouco, logo, não "compensa" andar.
 
-Sensitividade = P(Teste + | Doença Presente)
-Especificidade = P(Teste − | Doença Ausente)
+Por fim, vale vale ressaltar que foi ajustado, de forma comparativa, uma floresta aleatória. Coincidentemente, ambos métodos apresentaram `r 100 * acuracia1`% de acurácia. Entretanto, pela matriz de confusão dos modelos, foi possível ver que a rede neural teve uma maior sensitividade (predizer que está quebrado dado que está quebrado) do que a floresta aleatória. Então, adotando uma postura mais "conservadora", optamos por ficar com o modelo da rede neural visando diminuiras perdas (comprar um produto quebrado). Vale comentar tambem que este modelo cometeu menos o erro de classificar como não quebrado quando estava quebrado (15 da rede contra 19 da floresta).
+
+<!-- Neste banco de dados, por haver poucos itens quebrados, torna-se mais difícil determiná-los ensando em predizer se o produto não estava quebrado de fato, do que predizer se estava quebrado. Isso se deve a uma quantidade bem maior de itens não quebrados do que os danificados. -->
+
+<!-- Sensitividade = P(Teste + | Doença Presente) -->
+<!-- Especificidade = P(Teste − | Doença Ausente) -->
 
 ---
 
@@ -93,10 +115,11 @@ Utilize o modelo final para gerar predições no conjunto de validação (`produ
 
 ```{r, warning=FALSE, message=FALSE}
 valida <- read_csv('produtos_valida.csv')
-pred <- ifelse(predict(fit, newdata = valida) >= 0.5, 1, 0)
-table('modelo'=pred, 'verdadeiro'=valida$y)
+pred <- apply(predict(fit, newdata = valida), MARGIN = 1, which.max) - 1
+(tab <- table('modelo' = pred, 'verdadeiro' = valida$y))
 ```
 
+Pela matriz de confusão, erramos 49 produtos, o que gera uma acurácia de `r round(100 * (tab[1] + tab[4])/sum(tab), 2)`%.
 
 ---
 
@@ -131,19 +154,13 @@ Matriz de "Perda":
     & 1 & $-(\phi - \psi_i)$ & $\psi_i$\\
 \end{tabular}
 
-
-```{r}
-# é para o banco de dados valida?
-val_venda <- 110
-
-```
-
 A regra de decisão é dada pelo valor esperado da Tabela 1, ou seja, $-(\phi - \psi_i)(1-\hat y) + \hat y\psi_i < 0$ menor que zero para o custo esperado de não comprar o produto (d=0)
 isto é
 $\hat y < \dfrac{\phi-\psi_i}{\phi} = a$
 intuição: para minimizar o custo esperado da decisão, quanto mais caro for o produto, menor o limiar (a) para a compra. Em outras palavras, mesmo que o produto barato tenha uma probabilidade estimada maior de quebra, ele vale mais a pena do que um caro com probabilidade baixa devido ao preço de revenda fixo $\phi$.
 
 exemplo: considere $\phi = 100$ e $\psi_1 = 10$. use seus neuronios
+
 ---
 
 ## 5. Validação da Regra de Decisão
@@ -153,12 +170,37 @@ Aplique sua regra de decisão ao conjunto de validação (`produtos_valida.csv`)
 **Responda às perguntas:**
 
 - Quantos produtos seriam comprados? Quantos não seriam?
-
 - Qual seria o lucro (ou prejuízo) total ao final do processo de compra e revenda?
-
 - Comente os resultados, avaliando se a decisão parece vantajosa.
 
-parece vantajosa, afinal estamos ganhando dinheiro. O valor de $\phi$ ser fixo e maior do que qualquer custo de compra influencia nessa tomada de decisão
+
+```{r}
+val_venda <- 110
+valida <- read_csv('produtos_valida.csv')
+pred <- apply(predict(fit, newdata = valida), MARGIN = 1, which.max) - 1
+compra <- as.vector(pred < (val_venda - valida$cost)/val_venda)
+
+despesa <- sum(valida$cost[compra])
+venda_total <- sum(compra & !valida$y) * val_venda
+lucro <- venda_total - despesa
+
+valida$compra <- compra
+
+valida$pred <- pred
+
+valida |> 
+  ggplot(aes(x = cost, y = pred, col = compra)) +
+  geom_function(fun = \(x) (val_venda - x)/val_venda, col = 'black', lwd = 1) + 
+  geom_point() +
+  theme_bw()
+
+valida |> 
+  ggplot(aes(x = y, fill = compra)) +
+  geom_bar(position = 'dodge') +
+  theme_bw()
+```
+
+Parece vantajosa, afinal estamos ganhando dinheiro. O valor de $\phi$ ser fixo e maior do que qualquer custo de compra influencia nessa tomada de decisão
 
 ---
 
