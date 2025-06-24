@@ -92,7 +92,7 @@ Ademais, ressalta-se que primeira camada é crucial, pois ela determina a quanti
 
 Além disso, o parâmetro `threshold` (menor valor absoluto da derivada parcial) foi fundamental para a rapidez da convergência. No sentido de que se ele for um valor pequeno, isso significa que o próximo passo é andar pouco, logo, não "compensa" andar.
 
-Por fim, vale vale ressaltar que foi ajustado, de forma comparativa, uma floresta aleatória. Coincidentemente, ambos métodos apresentaram `r 100 * acuracia1`% de acurácia. Entretanto, pela matriz de confusão dos modelos, foi possível ver que a rede neural teve uma maior sensitividade (predizer que está quebrado dado que está quebrado) do que a floresta aleatória. Então, adotando uma postura mais "conservadora", optamos por ficar com o modelo da rede neural visando diminuiras perdas (comprar um produto quebrado). Vale comentar tambem que este modelo cometeu menos o erro de classificar como não quebrado quando estava quebrado (15 da rede contra 19 da floresta).
+Por fim, vale vale ressaltar que foi ajustado, de forma comparativa, uma floresta aleatória. Coincidentemente, ambos métodos apresentaram `r 100 * acuracia1`% de acurácia. Entretanto, pela matriz de confusão dos modelos, foi possível ver que a rede neural teve uma maior sensitividade (predizer que está quebrado dado que está quebrado) do que a floresta aleatória. Então, adotando uma postura mais "conservadora", optamos por ficar com o modelo da rede neural visando diminuiras perdas (comprar um produto quebrado). Vale comentar tambem que este modelo cometeu menos o erro de classificar como não quebrado quando estava quebrado (15 da rede contra 19 da floresta), outro quesito interessate para evitar perda.
 
 <!-- Neste banco de dados, por haver poucos itens quebrados, torna-se mais difícil determiná-los ensando em predizer se o produto não estava quebrado de fato, do que predizer se estava quebrado. Isso se deve a uma quantidade bem maior de itens não quebrados do que os danificados. -->
 
@@ -119,7 +119,7 @@ pred <- apply(predict(fit, newdata = valida), MARGIN = 1, which.max) - 1
 (tab <- table('modelo' = pred, 'verdadeiro' = valida$y))
 ```
 
-Pela matriz de confusão, erramos 49 produtos, o que gera uma acurácia de `r round(100 * (tab[1] + tab[4])/sum(tab), 2)`%.
+Pela matriz de confusão, erramos `r tab[2] + tab[3]` produtos, o que gera uma acurácia de `r round(100 * (tab[1] + tab[4])/sum(tab), 2)`%.
 
 ---
 
@@ -147,19 +147,17 @@ Para modelar o problema, considere:
 - Decisão: com base na probabilidade estimada do produto estar quebrado, vamos determinar se devemos comprá-lo ($d=1$) ou não ($d=0$).
 
 Matriz de "Perda":
-\begin{tabular}{cccc}
+\begin{tabular}{c|ccc}
     &   & y\\
-    &   & 0                  & 1\\
+    &   & 0                  & 1\\\hline
   d & 0 & 0                  & 0\\
-    & 1 & $-(\phi - \psi_i)$ & $\psi_i$\\
+    & 1 & $-(\phi - \psi_i)$ & $\psi_i$\\\hline
 \end{tabular}
 
-A regra de decisão é dada pelo valor esperado da Tabela 1, ou seja, $-(\phi - \psi_i)(1-\hat y) + \hat y\psi_i < 0$ menor que zero para o custo esperado de não comprar o produto (d=0)
-isto é
-$\hat y < \dfrac{\phi-\psi_i}{\phi} = a$
-intuição: para minimizar o custo esperado da decisão, quanto mais caro for o produto, menor o limiar (a) para a compra. Em outras palavras, mesmo que o produto barato tenha uma probabilidade estimada maior de quebra, ele vale mais a pena do que um caro com probabilidade baixa devido ao preço de revenda fixo $\phi$.
+A regra de decisão é dada pelo valor esperado da Tabela 1, ou seja, $-(\phi - \psi_i)(1-\hat y) + \hat y\psi_i$, além disso, queremos que este valor seja menor que zero para máximizar o ganho. Logo, $\hat y < \dfrac{\phi-\psi_i}{\phi} = a$.
 
-exemplo: considere $\phi = 100$ e $\psi_1 = 10$. use seus neuronios
+Intuição: para minimizar o custo esperado da decisão, quanto mais caro for o produto, menor o limiar $a$ para a compra. Em outras palavras, mesmo que o produto barato tenha uma probabilidade estimada maior de quebra, ele vale mais a pena do que um caro com probabilidade baixa devido ao preço de revenda fixo $\phi$. Note que se vendermos um produto que custou 11 reais, precisaríamos que outros 9 produtos com o mesmo custo quebrassem para que não exista lucro. Ao mesmo tempo, se o produto na verdade custa 100, se apenas um quebrar já estaremos no prejuízo.
+
 
 ---
 
@@ -178,13 +176,17 @@ Aplique sua regra de decisão ao conjunto de validação (`produtos_valida.csv`)
 val_venda <- 110
 valida <- read_csv('produtos_valida.csv')
 valida$y <- factor(valida$y)
-pred_prob <- predict(fit, newdata = valida)              # prob predita
+pred_prob <- predict(fit, newdata = valida)  # prob predita
 compra <- as.vector(pred_prob[,2] < (val_venda - valida$cost)/val_venda)  # indica se compra
 
 despesa <- sum(valida$cost[compra])
-venda_total <- sum(compra & !valida$y) * val_venda
+venda_total <- sum(compra & (valida$y == 0)) * val_venda
 lucro <- venda_total - despesa
+```
 
+Logo, compramos `r sum(compra)` produtos de `r nrow(valida)`, ou seja `r nrow(valida) - sum(compra)` não foram comprados. Além disso, obtivemos um lucro de `r lucro`.
+
+```{r}
 valida$compra <- compra
 valida$pred <- pred_prob[,2]
 
@@ -203,7 +205,7 @@ valida |>
   theme_bw()
 ```
 
-Parece vantajosa, afinal estamos ganhando dinheiro. O valor de $\phi$ ser fixo e maior do que qualquer custo de compra influencia nessa tomada de decisão.
+A regra parece vantajosa, afinal estamos ganhando dinheiro. O valor de $\phi$ ser fixo e maior do que qualquer custo de compra influencia nessa tomada de decisão.
 
 ---
 
@@ -229,6 +231,14 @@ O arquivo `produtos_teste.csv` contém um novo conjunto de produtos, **sem a var
 | 0 |
 | 0 |
 | 1 |
+
+```{r}
+prod_test <- read_csv('produtos_teste.csv', show_col_types = F)
+pred_prob <- predict(fit, newdata = prod_test)
+compra <- as.numeric(pred_prob[,2] < (val_venda - prod_test$cost)/val_venda)  # indica se compra
+write_csv(data.frame(d = compra), 'l4-pred-J.csv')
+```
+
 
 ---
 
