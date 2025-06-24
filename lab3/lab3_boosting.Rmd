@@ -174,8 +174,9 @@ predict.boosting <- function(boosting_result, k, type = c('classe', 'prob'),
 ```{r, echo=F, eval=F}
 # testando função
 boost <- boosting(0.5, lambda = 0.5, n_tree = 3, tree_depth = 1, data = mnist)
-debug(predict.boosting)
-predict(boost)
+# debug(predict.boosting)
+predict(boost, type='classe')  # default
+predict(boost, type='prob')
 ```
 
 ---
@@ -240,9 +241,14 @@ O arquivo `MNIST35-teste.csv` contém observações **sem a variável resposta**
 
 **Entrega:** Submeta o arquivo `.csv` com as predições no Moodle, juntamente com seu relatório.
 
-Para diminuir o tempo de processamento, apenas 6 modelos serão investigados, os cenários serão, $\lambda$ baixo ($0.5$) e alto ($0.9$), profundidade da árvore (`tree_depth`) pequena ($1$), média ($3$) e grande ($5$). Além disso, a quantidade de árvores não foi tão investigada já que após 30 árvores, notou-se que os modelos tendem a estabilziar o EQM.
+Os modelos serão testados utilizando o método hold-out separando o banco de dados em 75% para treino e 25% para teste. Além disso, para diminuir o tempo de processamento, apenas 6 modelos serão investigados, os cenários foram:
 
-```{r Q6}
+- $\lambda$ baixo ($0.5$) e alto ($0.9$);
+- profundidade da árvore (`tree_depth`) pequena ($1$), média ($3$) e grande ($5$).
+
+Além disso, a quantidade de árvores não foi investigada, uma vez que, após cerca de 30 árvores, notou-se que os modelos tendem a estabilziar o EQM, então fixou-se o número de árvores em 50.
+
+```{r Q6_1}
 # hold out 75/25
 i_treino <- sample(1:nrow(mnist), size = nrow(mnist)*0.75, replace = F)
 sample_treino <- mnist[i_treino,]
@@ -274,15 +280,16 @@ legend('topright', bty = 'n', lwd = 2,
 
 Com base nos gráficos, é possível ver que o melhor ajuste foi $\lambda = 0.5$ e `tree_depth` = 5.
 
-```{r Q6}
+```{r Q6_2}
 # modelo escolhido
 fit <- boosting(f0 = 0.5, lambda = 0.5, n_tree = 50, tree_depth = 5, data = mnist)
-table('modelo'=predict(fit), 'verdadeiro'=mnist$y)  # matriz de confusão
+table('modelo' = predict(fit), 'verdadeiro' = mnist$y)  # matriz de confusão
 
 # predição
-mnist_teste <- read_csv('MNIST35-teste.csv')
+mnist_teste <- read_csv('MNIST35-teste.csv', show_col_types = F)
 pred <- predict(fit, type = 'classe', newdata = mnist_teste)
-result <- ifelse(pred == 0, 3, 5)
-write_csv(pred, 'l3-pred-J.csv')
+result <- data.frame(predicao = ifelse(pred == 0, 3, 5))
+write_csv(result, 'l3-pred-J.csv')
 ```
+
 
