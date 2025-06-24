@@ -177,30 +177,33 @@ Aplique sua regra de decisão ao conjunto de validação (`produtos_valida.csv`)
 ```{r}
 val_venda <- 110
 valida <- read_csv('produtos_valida.csv')
-pred <- apply(predict(fit, newdata = valida), MARGIN = 1, which.max) - 1
-compra <- as.vector(pred < (val_venda - valida$cost)/val_venda)
+valida$y <- factor(valida$y)
+pred_prob <- predict(fit, newdata = valida)              # prob predita
+compra <- as.vector(pred_prob[,2] < (val_venda - valida$cost)/val_venda)  # indica se compra
 
 despesa <- sum(valida$cost[compra])
 venda_total <- sum(compra & !valida$y) * val_venda
 lucro <- venda_total - despesa
 
 valida$compra <- compra
+valida$pred <- pred_prob[,2]
 
-valida$pred <- pred
-
-valida |> 
+valida |>
   ggplot(aes(x = cost, y = pred, col = compra)) +
-  geom_function(fun = \(x) (val_venda - x)/val_venda, col = 'black', lwd = 1) + 
+  geom_function(fun = \(x) (val_venda - x)/val_venda, col = 'black', lwd = 1) +
   geom_point() +
   theme_bw()
+```
+A linha preta representa nossa regra de decisão, onde todos os itens que estão abaixo são comprados.
 
-valida |> 
+```{r}
+valida |>
   ggplot(aes(x = y, fill = compra)) +
   geom_bar(position = 'dodge') +
   theme_bw()
 ```
 
-Parece vantajosa, afinal estamos ganhando dinheiro. O valor de $\phi$ ser fixo e maior do que qualquer custo de compra influencia nessa tomada de decisão
+Parece vantajosa, afinal estamos ganhando dinheiro. O valor de $\phi$ ser fixo e maior do que qualquer custo de compra influencia nessa tomada de decisão.
 
 ---
 
