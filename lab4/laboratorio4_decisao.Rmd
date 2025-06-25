@@ -147,7 +147,7 @@ Para modelar o problema, considere:
 - Decisão: com base na probabilidade estimada do produto estar quebrado, vamos determinar se devemos comprá-lo ($d=1$) ou não ($d=0$).
 
 Matriz de "Perda":
-\begin{tabular}{c|ccc}
+\begin{tabular}{cc|cc}
     &   & y\\
     &   & 0                  & 1\\\hline
   d & 0 & 0                  & 0\\

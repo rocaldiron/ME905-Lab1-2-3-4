@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.6.23)  24 JUN 2025 20:56
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.6.23)  24 JUN 2025 21:01
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -550,13 +550,13 @@ File: ts1lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 [1
 
 {c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/enc/dvips/lm/lm-ec.enc}{c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/enc/dvips/lm/lm-ts1.enc}]
-Overfull \hbox (44.74348pt too wide) in paragraph at lines 216--216
-[]\T1/lmtt/m/n/10 ## hidden: 20, 15, 20    thresh: 0.01    rep: 1/1    steps:     114 error: 5.01719  time: 0.5 secs[] 
+Overfull \hbox (49.99347pt too wide) in paragraph at lines 216--216
+[]\T1/lmtt/m/n/10 ## hidden: 20, 15, 20    thresh: 0.01    rep: 1/1    steps:     114 error: 5.01719  time: 0.53 secs[] 
  []
 
 
-Overfull \hbox (44.74348pt too wide) in paragraph at lines 261--261
-[]\T1/lmtt/m/n/10 ## hidden: 20, 15, 20    thresh: 0.01    rep: 1/1    steps:     129 error: 2.00661  time: 0.8 secs[] 
+Overfull \hbox (49.99347pt too wide) in paragraph at lines 261--261
+[]\T1/lmtt/m/n/10 ## hidden: 20, 15, 20    thresh: 0.01    rep: 1/1    steps:     129 error: 2.00661  time: 0.82 secs[] 
  []
 
 
@@ -603,7 +603,7 @@ Here is how much of TeX's memory you used:
  36 hyphenation exceptions out of 8191
  83i,7n,93p,1017b,490s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmbx10.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmbx12.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmmi10.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmmi7.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmr10.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmr12.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmr17.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmri10.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmsy10.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmtk10.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmtt10.pfb><c:/Users/jvsiq/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmtti10.pfb>
-Output written on laboratorio4_decisao.pdf (7 pages, 294251 bytes).
+Output written on laboratorio4_decisao.pdf (7 pages, 294260 bytes).
 PDF statistics:
  171 PDF objects out of 1000 (max. 8388607)
  127 compressed objects within 2 object streams
